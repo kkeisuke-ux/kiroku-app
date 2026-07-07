@@ -55,6 +55,8 @@
     padding:10px 16px; font-weight:700; }
   .feedbtn{ display:block; margin:14px auto 0; background:var(--brand); color:#fff; border:none;
     border-radius:999px; padding:12px 22px; font-size:15px; font-weight:700; }
+  .homebtn{ display:block; margin:20px auto 0; background:var(--kaeri); color:#fff; border:none;
+    border-radius:999px; padding:14px 32px; font-size:16px; font-weight:700; box-shadow:0 4px 12px rgba(46,143,196,.3); }
   .pet{ display:inline-block; cursor:pointer; position:relative; padding:10px; }
   .pet .fl{ display:inline-block; transition:transform .45s ease; }
   .pet .fl.grown{ transform:scale(1.14); }
@@ -151,17 +153,26 @@
   .trend .tb span{ position:absolute; bottom:-16px; left:50%; transform:translateX(-50%); font-size:9px; color:#8d887a; white-space:nowrap; }
   .tnote{ height:14px; }
 
-  .goalopts{ display:flex; flex-direction:column; gap:9px; }
+  .goalopts{ display:flex; flex-direction:column; gap:10px; }
   .goalopt{ display:flex; gap:12px; align-items:center; text-align:left; background:#fff;
-    border:2px solid #e3ddc9; border-radius:16px; padding:12px 14px; font-size:14.5px; font-weight:700; color:var(--ink); }
-  .goalopt .e{ font-size:24px; }
-  .goalopt small{ display:block; font-weight:400; font-size:11px; color:#8d887a; }
-  .mt-intro{ font-size:13px; color:#8d887a; margin:4px 0 10px; }
-  .lastviz{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
-  .lv{ background:#fff; border:2px solid #e3ddc9; border-radius:14px; padding:8px 6px; text-align:center;
+    border:2px solid #d9d0e8; border-radius:16px; padding:14px 16px; font-size:15.5px; font-weight:700; color:var(--ink); width:100%; }
+  .goalopt:active{ background:#f3eefb; }
+  .goalopt .e{ font-size:28px; flex:none; }
+  .goalopt small{ display:block; font-weight:400; font-size:11.5px; color:#8d887a; margin-top:2px; }
+  .goalopt small b{ color:var(--meate); }
+  /* めあて画面のセクション見出し */
+  .gsec{ font-size:12.5px; font-weight:700; color:#8d887a; margin:6px 2px 8px; display:flex; align-items:center; gap:6px; }
+  .gsec::after{ content:''; flex:1; height:1px; background:#e3ddc9; }
+  .gpick{ font-size:16px; font-weight:700; color:#fff; background:var(--meate); border-radius:14px;
+    padding:12px 14px; text-align:center; margin:18px 0 12px; }
+  .gpick b{ font-size:18px; }
+  .lastcard{ background:#eef4fa; border:2px solid #d5e3f0; border-radius:16px; padding:12px 12px 8px; margin-bottom:6px; }
+  .lastviz{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .lv{ background:#fff; border:1px solid #d5e3f0; border-radius:12px; padding:8px 6px; text-align:center;
     font-size:10px; color:#8d887a; line-height:1.5; }
-  .lv .i{ display:block; font-size:20px; }
-  .lv b{ display:block; font-size:13px; color:var(--ink); }
+  .lv .i{ display:block; font-size:22px; }
+  .lv b{ display:block; font-size:16px; color:var(--ink); }
+  .curgoal{ background:#eafaf0; border:2px solid #b8e6c8; border-radius:14px; padding:10px 14px; margin-bottom:4px; font-size:13px; color:#2f7a4a; }
 
   .adult{ font-size:13px; }
   .a-sec{ background:#fff; border:1px solid #e3ddc9; border-radius:14px; padding:10px 12px; margin-bottom:8px; }
@@ -281,7 +292,7 @@
       {id:'M5d',icon:'🔢',kind:'cnt',q:'いっしょに あそんだ ともだちは なんにん？<br><span style="font-size:13px;color:#8d887a">(じぶんは かぞえません)</span>',needs:['pa','fr'],
        opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●']},
       {id:'M6',icon:'🎒',q:'きのう、ならいごとや クラブは あった？',opts:[['⭕','あった'],['🙅','なかった']],gate:'nr',openIdx:[0]},
-      {id:'M6a',icon:'⚽',q:'それは からだを うごかす ならいごと？',needs:['nr'],opts:[['⚽','からだを うごかすもの'],['🎹','それいがい'],['🔁','りょうほう あった']]}
+      {id:'M6a',icon:'⚽',q:'それは からだを うごかす ならいごと？',needs:['nr'],opts:[['⚽','はい(うんどうの ならいごと)'],['🎹','いいえ(うんどうでは ない ならいごと)'],['🔁','りょうほう あった']]}
     );
     if(extra.att) f.unshift({id:'ATT',icon:'🏫',q:'きのうは がっこうに いった？',opts:[['⭕','いった(にゅうりょくを わすれた)'],['🏠','おやすみだった']]});
     return f;
@@ -303,11 +314,16 @@
     {id:'K3a',icon:'🔢',kind:'cnt',q:'いっしょに あそんだ ともだちは なんにん？<br><span style="font-size:13px;color:#8d887a">(じぶんは かぞえません)</span>',needs:['lp','kfr'],
      opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●']},
   ];
-  const CATCH_FLOW=d=>[
-    {id:'M2',illust:'futon',ic:'night',kind:'rail-night',q:d+'の よる、なんじごろ ねた？',opts:BED,forget:true},
-    {id:'M3',illust:'sunrise',ic:'morning',kind:'rail-morning',q:'つぎの あさ、なんじごろ おきた？',opts:WAKE,forget:true},
-    {id:'M5',icon:'🏃',q:'その日、はしったり あせを かいたりする あそびや うんどうを した？',opts:[['💪','した'],['🙅','しなかった']],forget:true},
-  ];
+  /* あとから きろく:えらんだ日Dについて「D-1の よる」に寝て「Dの あさ」に起きたかを聞く */
+  const CATCH_FLOW=di=>{
+    const x=fromIso(di), prev=addDays(x,-1);
+    const dl=dt=>(dt.getMonth()+1)+'/'+dt.getDate()+'('+DOW1[dt.getDay()]+')';
+    return [
+      {id:'M2',illust:'futon',ic:'night',kind:'rail-night',q:dl(prev)+'の よる、なんじごろ ねた？',opts:BED,forget:true},
+      {id:'M3',illust:'sunrise',ic:'morning',kind:'rail-morning',q:dl(x)+'の あさ、なんじごろ おきた？',opts:WAKE,forget:true},
+      {id:'M5',icon:'🏃',q:dl(x)+'は、はしったり あせを かいたりする あそびや うんどうを した？',opts:[['💪','した'],['🙅','しなかった']],forget:true},
+    ];
+  };
 
   /* ============ 目標メニュー(goal_ladder 簡易版) ============ */
   const GOALS=[
@@ -393,25 +409,36 @@
     return p;
   }
 
-  /* ============ がんばりスコア(score_config v1) ============ */
+  /* ============ がんばりスコア(score_config v2:割合方式)============
+     「1週間の結果」を分かりやすく評価するための100点。週の途中から始めても
+     低く見えないよう、点数は日ごとの加算ではなく「はじめてからの日ぶんの わりあい」で計算する。
+     はんい = その週で最初に記録した日 〜 きょう(週が終わっていれば日曜)。
+     ・きろく 60点 = はんいの日ぶん、記録できた日の わりあい ×60(まいにち記録=60)
+     ・めあて 20点 = めあての しんちょく ×20(すすむほど 増える)
+     ・せいかつ 20点 = 記録した日の うち、めやすを みたした わりあい(3項目の平均)×20(部分点)
+     まとめて100点。週の途中は「いまの ちょうし」、日曜以降は「こんしゅうの けっか」。 */
   function score(mon){
-    const ds=weekDates(mon); let wd=0,we=0;
-    ds.forEach((d,i)=>{ const dd=fromIso(d), sch=isSchool(dd);
-      const rec=completed(d,'m')&&( !sch || completed(d,'k') );
-      if(rec){ if(i<5&&sch) wd+=10; else we+=10; } });
-    wd=Math.min(wd,50); we=Math.min(we,20);
-    const g=S.goals[mon], gpt=(g&&g.achieved)?10:0;
-    let life=0, obs=0, sleep9=0, st2ok=0, stobs=0, mv=0, mvobs=0;
-    ds.forEach(d=>{ const b=ans(d,'M2'), w=ans(d,'M3');
-      if(b!=null&&b!=='DK'&&w!=null&&w!=='DK'){ obs++; if(WAKE_H[w]+24-BED_H[b]>=9) sleep9++; }
-      const st=ans(d,'M4'); if(st===1){ st2ok++; stobs++; }
-      const sta=ans(d,'M4a'); if(sta!=null&&sta!=='DK'){ stobs++; if(ST_H[sta]<=2) st2ok++; }
-      const m=ans(d,'M5'); if(m!=null&&m!=='DK'){ mvobs++; if(m===0) mv++; } });
-    if(obs&&sleep9===obs) life+=5;
-    if(gapOK(mon)===true) life+=5;
-    if(stobs&&st2ok===stobs) life+=5;
-    if(mvobs&&mv===mvobs) life+=5;
-    return {total:wd+we+gpt+life, wd,we,gpt,life};
+    const ds=weekDates(mon), tISO=iso(today());
+    let start=null; ds.forEach(d=>{ if(start==null&&(completed(d,'m')||completed(d,'k'))) start=d; });
+    if(start==null) start=ds[0];
+    const win=ds.filter(d=> d>=start && d<=tISO );
+    const N=win.length||1;
+    let rec=0; win.forEach(d=>{ const sch=isSchool(fromIso(d));
+      if(completed(d,'m')&&(!sch||completed(d,'k'))) rec++; });
+    const recPt=Math.round(60*rec/N);
+    const g=S.goals[mon]; let goalPt=0;
+    if(g){ const gd=GOALS.find(x=>x.code===g.code);
+      if(gd.gapGoal){ goalPt=(gapOK(mon)===true)?20:0; }
+      else{ const now=gd.judge(mon)||0, tgt=g.target||1; goalPt=Math.round(20*Math.min(1,now/tgt)); } }
+    let sl=0,slo=0, st=0,sto=0, mv=0,mvo=0;
+    win.forEach(d=>{ const b=ans(d,'M2'),w=ans(d,'M3');
+      if(b!=null&&b!=='DK'&&w!=null&&w!=='DK'){ slo++; if(WAKE_H[w]+24-BED_H[b]>=9) sl++; }
+      const g4=ans(d,'M4'); if(g4===1){ sto++; st++; }
+      const sa=ans(d,'M4a'); if(sa!=null&&sa!=='DK'){ sto++; if(ST_H[sa]<=2) st++; }
+      const m=ans(d,'M5'); if(m!=null&&m!=='DK'){ mvo++; if(m===0) mv++; } });
+    const rates=[]; if(slo)rates.push(sl/slo); if(sto)rates.push(st/sto); if(mvo)rates.push(mv/mvo);
+    const lifePt=rates.length?Math.round(20*rates.reduce((a,b)=>a+b,0)/rates.length):0;
+    return {total:recPt+goalPt+lifePt, recPt, goalPt, lifePt, rec, N, done: tISO>=ds[6]};
   }
 
   /* ============ 画面遷移 ============ */
@@ -476,21 +503,23 @@
       if(fs.idx>0){ fs.idx=fs.hist.pop()??fs.idx-1; renderFlow(); } else go('home'); };
   }
   const PETMSG=['わーい！','もっと おおきく なるぞ！','ありがとう！','くすぐったーい！','げんきが でてきた！'];
+  const HOMEBTN='<button class="homebtn" id="home">🏠 ホームへ もどる</button>';
+  function bindHome(){ const h=document.getElementById('home'); if(h) h.onclick=()=>go('home'); }
   function renderDone(n){
     app.innerHTML='<div class="done" id="db"><div class="big">🌟</div><h3>きろく できた！</h3>'+
       '<p>きょうも よく がんばったね</p>'+
       (n>0?'<span class="stampcard">⭐ スター +'+n+'</span>':'<span class="stampcard">✏️ きろくを なおしたよ</span>')+
       (n>0?'<button class="feedbtn" id="feed">⭐を あげて そだてる</button>':'')+
-      '</div>'+
-      '<div class="backrow"><button class="backbtn" id="back">ホームへ もどる</button></div>';
-    document.getElementById('back').onclick=()=>go('home');
+      HOMEBTN+'</div>';
+    bindHome();
     const fb=document.getElementById('feed');
     if(fb) fb.onclick=()=>{
       ev({t:'feed'});
       const db=document.getElementById('db');
       db.innerHTML='<h3 id="ttl">⭐を あげるよ…</h3>'+
         '<div class="pet" id="pet"><span class="fedstar">⭐</span><span class="fl" id="fl">'+flowerSVG(stage())+'</span></div>'+
-        '<div class="petmsg" id="pm"></div>';
+        '<div class="petmsg" id="pm"></div>'+HOMEBTN;
+      bindHome();
       const pet=document.getElementById('pet');
       setTimeout(()=>{
         document.getElementById('fl').classList.add('grown');
@@ -553,8 +582,7 @@
     document.getElementById('mode').onclick=()=>{
       S.overrides[ti]=p.school?'holiday':'school'; ev({t:'mode',d:ti,to:S.overrides[ti]}); go('home'); };
     app.querySelectorAll('[data-c]').forEach(b=>{ b.onclick=()=>{
-      const d=b.dataset.c, x=fromIso(d);
-      startFlow(CATCH_FLOW((x.getMonth()+1)+'/'+x.getDate()+'('+DOW1[x.getDay()]+')'),'c',d,'あとから きろく','b-hol',1); }; });
+      startFlow(CATCH_FLOW(b.dataset.c),'c',b.dataset.c,'あとから きろく','b-hol',1); }; });
   }
 
   /* ============ わたしの1しゅうかん(実データ) ============ */
@@ -648,11 +676,11 @@
       '<span class="lab">からだを うごかす あそびや うんどうを した日</span>'+mv.map(v=>'<span class="st'+(v?'':' no')+'">'+(v==null?'・':'⭐')+'</span>').join('')+
       '<span class="lab"></span>'+['げつ','か','すい','もく','きん','ど','にち'].map((d,i)=>'<span class="dy'+(i>=5?' hd':'')+'">'+d+'</span>').join('')+
       '</div><div class="seechip">👀 あめの日に そとで あそべなくても、なかで からだを うごかせたら ⭐！</div></div>'+
-      '<div class="scorecard"><div><div class="pt">'+sc.total+'<small>てん</small></div><div style="font-size:11px;color:#4f7d3f">こんしゅうの がんばり</div></div>'+
-      '<div class="bd"><div><span>📝 平日の きろく</span><b>'+sc.wd+'/50</b></div>'+
-      '<div><span>🏅 土日の きろく</span><b>'+sc.we+'/20</b></div>'+
-      '<div><span>🎯 めあての たっせい</span><b>'+sc.gpt+'/10</b></div>'+
-      '<div><span>🌱 せいかつ</span><b>'+sc.life+'/20</b></div></div></div>'+
+      '<div class="scorecard"><div><div class="pt">'+sc.total+'<small>てん</small></div><div style="font-size:11px;color:#4f7d3f">'+(sc.done?'こんしゅうの けっか':'いまの ちょうし')+'</div></div>'+
+      '<div class="bd"><div><span>📝 きろくできた日</span><b>'+sc.rec+'/'+sc.N+'日</b></div>'+
+      '<div><span>🎯 めあて</span><b>'+sc.goalPt+'/20</b></div>'+
+      '<div><span>🌱 せいかつしゅうかん</span><b>'+sc.lifePt+'/20</b></div></div></div>'+
+      '<div class="seechip">👀 おそく はじめても だいじょうぶ。<b>はじめた日から まいにち きろく</b>すれば たかく なるよ！(きろく60点＋めあて20点＋せいかつ20点)</div>'+
       goalHtml+
       '<div class="backrow"><button class="backbtn" id="back">← ホームへ</button></div>';
     bindWeekSeg();
@@ -673,15 +701,15 @@
     const lastBed=cntWeek(lastMon,'M2',a=>a<=3), lastSoto=sotoDays(lastMon), lastMove=cntWeek(lastMon,'M5',a=>a===0);
     app.innerHTML=
       '<h2>こんしゅうの めあて 🎯</h2>'+
-      '<div class="mt-intro">せんしゅうの じぶんを 見て、ひとつ えらぼう</div>'+
-      '<div class="lastviz">'+
-      '<div class="lv"><span class="i">🌙</span>9じまでに ねた日<b>'+(lastBed||0)+'日</b></div>'+
-      '<div class="lv"><span class="i">🌳</span>そとで あそんだ日<b>'+(lastSoto||0)+'日</b></div>'+
-      '<div class="lv"><span class="i">🏃</span>からだを うごかした日<b>'+(lastMove||0)+'日</b></div>'+
-      '</div>'+
-      (g?('<div class="goalcard"><b>いま えらんでいる めあて:'+GOALS.find(x=>x.code===g.code).label+'</b>'+
-        '<div style="font-size:12px;margin-top:4px">かえたい ときは 下から えらびなおしてね</div></div>'):'')+
-      '<div class="goalopts" id="gopts" style="margin-top:10px"></div>'+
+      '<div class="gsec">📊 まずは せんしゅうを ふりかえろう</div>'+
+      '<div class="lastcard"><div class="lastviz">'+
+      '<div class="lv"><span class="i">🌙</span>9じまでに<br>ねた日<b>'+(lastBed||0)+'日</b></div>'+
+      '<div class="lv"><span class="i">🌳</span>そとで<br>あそんだ日<b>'+(lastSoto||0)+'日</b></div>'+
+      '<div class="lv"><span class="i">🏃</span>からだを<br>うごかした日<b>'+(lastMove||0)+'日</b></div>'+
+      '</div></div>'+
+      (g?('<div class="curgoal">いま えらんでいる めあて:<b>'+GOALS.find(x=>x.code===g.code).label+'</b></div>'):'')+
+      '<div class="gpick">🎯 こんしゅう がんばる めあてを<br><b>ひとつ</b> えらんでね</div>'+
+      '<div class="goalopts" id="gopts"></div>'+
       '<div class="backrow"><button class="backbtn" id="back">← ホームへ</button></div>';
     const box=document.getElementById('gopts');
     GOALS.forEach(gd=>{
@@ -689,13 +717,12 @@
       const target=gd.gapGoal?null:Math.min(7,Math.max(DEFAULT_TARGET,(prev||0)+1)); /* 先週+1の段階制御(簡易) */
       const b=document.createElement('button'); b.className='goalopt';
       b.innerHTML='<span class="e">'+gd.e+'</span><span>'+gd.label+
-        '<small>'+(gd.gapGoal?'ずれ 1じかん いない で たっせい':'こんしゅうの もくひょう:週'+target+'日')+'</small></span>';
+        '<small>'+(gd.gapGoal?'ずれ 1じかん いないで たっせい':'こんしゅうは <b>週'+target+'日</b> できたら たっせい！')+'</small></span>';
       b.onclick=()=>{ S.goals[mon]={code:gd.code,target:target||0,setAt:new Date().toISOString()};
         ev({t:'goal',code:gd.code,target:target||0,week:mon});
         app.innerHTML='<div class="done"><div class="big">🎯</div><h3>めあてが きまったよ！</h3>'+
-          '<p>'+gd.label+'</p><span class="stampcard">こんしゅう がんばろう！</span></div>'+
-          '<div class="backrow"><button class="backbtn" id="b2">← ホームへ</button></div>';
-        document.getElementById('b2').onclick=()=>go('home'); };
+          '<p>'+gd.label+'</p><span class="stampcard">こんしゅう がんばろう！</span>'+HOMEBTN+'</div>';
+        bindHome(); };
       box.appendChild(b);
     });
     document.getElementById('back').onclick=()=>go('home');
