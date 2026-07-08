@@ -472,16 +472,17 @@
     ];
   };
 
-  /* ============ 1年生用フロー(時間を聞かない・イラスト中心・とてもシンプル) ============ */
+  /* ============ 1年生用フロー(2年生以上の質問の「限定版」。時間・お金なし・イラスト中心)
+     質問ID・選択肢コードは2〜3年生(g23)と そろえる(=データを比較できる) ============ */
   const ASA_G1=[
-    {id:'M1',icon:'🌞',q:'きょうの きぶんは？',opts:[['😊','げんき'],['😐','ふつう'],['😢','げんきが ない']]},
-    {id:'G1SLEEP',icon:'😴',q:'よく ねむれた？',opts:[['😴','ぐっすり'],['🙂','まあまあ'],['😪','あまり ねられなかった']]},
-    {id:'G1ST',icon:'📺',q:'きのう、ゲームや どうがを 見た？',opts:[['👀','見た'],['🙅','見てない']]},
-    {id:'G1OUT',icon:'🌳',q:'きのう、そとで あそんだ？',opts:[['🌳','あそんだ'],['🏠','あそばなかった']]},
+    {id:'M1',icon:'🌞',q:'きょうの からだの ちょうしは？',opts:[['😊','げんき'],['😕','ちょっと わるい'],['🤕','ケガ・びょうきで うんどう できない']]},
+    {id:'G1OUT',icon:'🌳',q:'きのう、がっこうが おわってから、そとで あそんだ？',opts:[['🌳','あそんだ'],['🏠','あそばなかった']]},
   ];
   const KAERI_G1=[
-    {id:'G1KOUT',icon:'🌳',q:'きょう、そとで あそんだ？',opts:[['🌳','そとで あそんだ'],['🏫','なかに いた']]},
-    {id:'G1WHO',icon:'👫',q:'だれと あそんだ？',opts:[['🧍','ひとりで'],['👫','ともだちと']]},
+    {id:'K1',icon:'🕙',q:'きょうの なかやすみは、そとで あそんだ？',opts:[['🌳','そとで あそんだ'],['🏫','なかに いた'],['🚫','きょうは なかった']]},
+    {id:'K2',icon:'🍚',q:'きょうの ひるやすみは、そとで あそんだ？',opts:[['🌳','そとで あそんだ'],['🏫','なかに いた'],['🚫','きょうは なかった']],gate:'lp',openIdx:[0,1]},
+    {id:'K3',icon:'👫',q:'ひるやすみは、だれと あそんだ？',needs:['lp'],opts:[['🧍','ひとりで'],['👫','ともだちと']],gate:'fr',openIdx:[1]},
+    {id:'K3a',icon:'🔢',kind:'cnt',q:'いっしょに あそんだ ともだちは なんにん？',needs:['lp','fr'],opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●']},
   ];
 
   /* ============ 目標メニュー(goal_ladder 簡易版) ============ */
@@ -883,7 +884,7 @@
       const t=today(), y=t.getFullYear(), m=t.getMonth(), last=new Date(y,m+1,0).getDate();
       for(let dn=1;dn<=last;dn++){ const di=iso(new Date(y,m,dn));
         if(completed(di,'m')||completed(di,'k')) recDays++;
-        if(ans(di,'G1OUT')===0||ans(di,'G1KOUT')===0) outDays++; }
+        if(ans(di,'G1OUT')===0||ans(di,'K1')===0||ans(di,'K2')===0) outDays++; }
       app.className='app wk g1';
       app.innerHTML='<h2>これまでの きろく 📅</h2>'+
         '<div class="card" style="text-align:center;padding:16px"><div style="font-size:40px">⭐</div>'+
@@ -1135,7 +1136,6 @@
         if(k2===0) ev({t:'ans',d:di,s:'k',q:'K2a',v:QV,a:r(4),lat:700});
         else { ev({t:'ans',d:di,s:'k',q:'K2b',v:QV,a:r(4),lat:700}); ev({t:'ans',d:di,s:'k',q:'K2c',v:QV,a:r(5),lat:700}); }
         const w=r(3); ev({t:'ans',d:di,s:'k',q:'K3',v:QV,a:w,lat:600}); if(w===1) ev({t:'ans',d:di,s:'k',q:'K3a',v:QV,a:r(3),lat:600});
-        ev({t:'ans',d:di,s:'k',q:'G1KOUT',v:QV,a:(k2===0?0:1),lat:600});
         ev({t:'complete',s:'k',d:di});
         if(G1){ S.care[S.buddy]=(S.care[S.buddy]||0)+1; } else { S.coins+=COIN_PER_REC; ev({t:'coin',n:COIN_PER_REC}); }
       }
