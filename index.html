@@ -97,7 +97,15 @@
     color:#8a6516; border-radius:999px; padding:4px 12px; font-size:12px; }
   .modelink{ margin-top:12px; font-size:12px; color:#8d887a; background:#fff; border:1px dashed #cfc9b6;
     border-radius:999px; padding:7px 14px; align-self:center; }
-  /* 月末ごほうびバナー */
+  /* おかね(コイン)バー */
+  .coinbar{ margin:6px 0 4px; background:linear-gradient(135deg,#fdf3d8,#f8e3a8); border:2px solid #ecd88a;
+    border-radius:14px; padding:9px 14px; display:flex; justify-content:space-between; align-items:center; }
+  .coinbar span{ font-size:12px; font-weight:700; color:#8a6516; }
+  .coinbar b{ font-size:17px; color:#b06a12; font-variant-numeric:tabular-nums; }
+  .coinreward{ background:#fdf3d8; border:2px solid #ecd88a; border-radius:16px; padding:12px 20px;
+    font-size:20px; font-weight:700; color:#b06a12; display:inline-block; }
+  .coinreward .coined{ font-size:13px; font-weight:400; color:#8a6516; margin-top:4px; }
+  .coinreward .coined b{ font-size:16px; color:#b06a12; }
   .rewardbtn{ margin:6px 0 10px; width:100%; border:none; border-radius:16px; padding:12px 14px;
     background:linear-gradient(135deg,#f6b73c,#e8940f); color:#fff; font-size:14px; font-weight:700;
     box-shadow:0 4px 12px rgba(232,148,15,.35); }
@@ -243,11 +251,11 @@
         d.weather=d.weather||{}; d.region=d.region||{lat:35.17,lon:136.91};
         d.pin=d.pin||'1122';
         d.owned=d.owned||['flower']; d.buddy=d.buddy||'flower';
-        d.care=d.care||{flower:d.stars||0}; d.converted=d.converted||{};
+        d.care=d.care||{flower:0}; d.coins=(d.coins!=null?d.coins:(d.stars||0)*10);
         return d; } }catch(e){}
-    return {name:'', setup:false, events:[], stars:0, goals:{}, overrides:{},
+    return {name:'', setup:false, events:[], goals:{}, overrides:{},
       server:{url:'',token:'',child:''}, weather:{}, region:{lat:35.17,lon:136.91}, pin:'1122',
-      owned:['flower'], buddy:'flower', care:{flower:0}, converted:{}};
+      owned:['flower'], buddy:'flower', care:{flower:0}, coins:0};
   }
   function save(){ localStorage.setItem(KEY, JSON.stringify(S)); }
   function uid(){ return (crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2)); }
@@ -333,31 +341,35 @@
     {id:'panda',  name:'パンダ',    st:['🐾','🐼','🐼','🎋','🐻']},
   ];
   function charDef(id){ return CHARS.find(c=>c.id===id)||CHARS[0]; }
-  const STAGE_TH=[0,6,16,32,60];  /* せわ回数→成長ステージ(0..4) */
+  /* ====== おかね(コイン)とスターの けいざい(お金の勉強をかねる) ======
+     ・きろく1かい = COIN_PER_REC コイン(まいにち たまる)
+     ・スター1こ = STAR_COST コイン → いま そだてている子に あげてレベルアップ
+     ・ガチャ = GACHA_COST コイン、あたると 新しいなかま、はずれもある */
+  const COIN_PER_REC=10, STAR_COST=10, GACHA_COST=40, GACHA_WIN=0.6;
+  const STAGE_TH=[0,5,12,22,35];  /* あげたスター数→成長ステージ(0..4) */
   function stageOf(id){ const c=(S.care[id]||0); let s=0; STAGE_TH.forEach((t,i)=>{ if(c>=t) s=i; }); return s; }
   function buddyStage(){ return stageOf(S.buddy); }
+  function nextStarNeed(id){ const c=S.care[id]||0; for(let i=0;i<STAGE_TH.length;i++){ if(c<STAGE_TH[i]) return STAGE_TH[i]-c; } return 0; }
   function charVisual(id, stg, size){ size=size||64;
     const c=charDef(id);
     if(c.svg){ return '<span style="display:inline-block;transform:scale('+(size/64)+')">'+flowerSVG(stg)+'</span>'; }
     return '<span style="font-size:'+size+'px;line-height:1;display:inline-block">'+c.st[Math.min(4,stg)]+'</span>';
   }
-  /* 月ごとの スタンプ数(記録できた セッション数)と 月末の ごほうび */
-  function stampsInMonth(ym){ let n=0; S.events.forEach(e=>{ if(e.t==='complete' && (e.d||'').slice(0,7)===ym) n++; }); return n; }
-  function pendingRewards(){
-    const curYm=iso(today()).slice(0,7); const months=new Set();
-    S.events.forEach(e=>{ if(e.t==='complete'&&e.d) months.add(e.d.slice(0,7)); });
-    const res=[]; months.forEach(ym=>{ if(ym<curYm && !S.converted[ym]){ const st=stampsInMonth(ym);
-      if(st>0) res.push({ym, stamps:st, stars:Math.max(1,Math.floor(st/3))}); } });
-    return res.sort((a,b)=>a.ym<b.ym?-1:1);
+  function buyStar(){   /* コインで スターを1こ かって いまのバディに あげる */
+    if(S.coins<STAR_COST) return false;
+    const before=buddyStage(); S.coins-=STAR_COST; S.care[S.buddy]=(S.care[S.buddy]||0)+1;
+    ev({t:'buystar',id:S.buddy}); save();
+    return {leveledUp: buddyStage()>before};
   }
-  const GACHA_COST=5;
   function gachaPull(){
-    if(S.stars<GACHA_COST) return null;
-    S.stars-=GACHA_COST;
+    if(S.coins<GACHA_COST) return null;
+    S.coins-=GACHA_COST; ev({t:'gacha'});
     const locked=CHARS.filter(c=>!S.owned.includes(c.id));
-    if(locked.length){ const g=locked[Math.floor(Math.random()*locked.length)];
-      S.owned.push(g.id); S.care[g.id]=0; ev({t:'gacha',id:g.id}); save(); return {id:g.id,isNew:true}; }
-    S.stars+=2; ev({t:'gacha',id:'dup'}); save(); return {isNew:false,bonus:2};
+    const win = locked.length>0 && Math.random()<GACHA_WIN;
+    if(win){ const g=locked[Math.floor(Math.random()*locked.length)];
+      S.owned.push(g.id); S.care[g.id]=S.care[g.id]||0; ev({t:'gachawin',id:g.id}); save(); return {id:g.id,isNew:true}; }
+    /* はずれ:半分もどる(コインの勉強:あたらない時もある) */
+    const back=Math.floor(GACHA_COST/2); S.coins+=back; save(); return {isNew:false,back:back,allOwned:locked.length===0};
   }
 
   function asaFlow(dow,holiday,extra){
@@ -547,8 +559,10 @@
     if(fs.idx>=items.length){
       const already=completed(fs.d,fs.sess);   /* やり直し入力では二重にカウントしない */
       ev({t:'complete',s:fs.sess,d:fs.d});     /* 1記録=1スタンプ(カレンダーに反映) */
+      let earned=0;
+      if(!already){ earned=COIN_PER_REC; S.coins+=earned; ev({t:'coin',n:earned}); }
       syncNow();   /* セッション完了ごとにサーバへ送信(設定時のみ) */
-      renderDone(!already); return;
+      renderDone(earned); return;
     }
     const it=items[fs.idx];
     const dots=items.map((_,i)=>'<i class="'+(i<fs.idx?'on':(i===fs.idx?'on now':''))+'"></i>').join('');
@@ -591,32 +605,16 @@
   const PETMSG=['わーい！','もっと おおきく なるぞ！','ありがとう！','くすぐったーい！','げんきが でてきた！'];
   const HOMEBTN='<button class="homebtn" id="home">🏠 ホームへ もどる</button>';
   function bindHome(){ const h=document.getElementById('home'); if(h) h.onclick=()=>go('home'); }
-  function renderDone(isNew){
-    const bn=charDef(S.buddy).name;
+  function renderDone(earned){
     app.innerHTML='<div class="done" id="db"><div class="big">🌟</div><h3>きろく できた！</h3>'+
       '<p>きょうも よく がんばったね</p>'+
-      (isNew?'<span class="stampcard">⭐ スタンプ +1</span>':'<span class="stampcard">✏️ きろくを なおしたよ</span>')+
-      (isNew?'<button class="feedbtn" id="feed">🌟 '+bn+'を おせわする</button>':'')+
+      (earned>0
+        ? '<div class="coinreward">🪙 コイン ＋'+earned+'<div class="coined">ぜんぶで <b>'+S.coins+'</b>コイン</div></div>'
+        : '<span class="stampcard">✏️ きろくを なおしたよ</span>')+
+      (earned>0?'<button class="feedbtn" id="shop">🛒 ショップで つかう</button>':'')+
       HOMEBTN+'</div>';
     bindHome();
-    const fb=document.getElementById('feed');
-    if(fb) fb.onclick=()=>{
-      S.care[S.buddy]=(S.care[S.buddy]||0)+1; ev({t:'care',id:S.buddy}); save();
-      const db=document.getElementById('db');
-      db.innerHTML='<h3 id="ttl">🌟 おせわ するよ…</h3>'+
-        '<div class="pet" id="pet"><span class="fedstar">🌟</span><span class="fl" id="fl">'+charVisual(S.buddy,buddyStage(),80)+'</span></div>'+
-        '<div class="petmsg" id="pm"></div>'+HOMEBTN;
-      bindHome();
-      const pet=document.getElementById('pet');
-      setTimeout(()=>{
-        document.getElementById('fl').classList.add('grown');
-        document.getElementById('ttl').textContent='ぱくっ！ '+bn+'が よろこんだ！';
-        document.getElementById('pm').textContent='タップすると よろこぶよ！';
-        burst(pet,6);
-        pet.onclick=()=>{ pet.classList.remove('wig'); void pet.offsetWidth; pet.classList.add('wig');
-          document.getElementById('pm').textContent=PETMSG[Math.floor(Math.random()*PETMSG.length)]; burst(pet,1); };
-      },900);
-    };
+    const sb=document.getElementById('shop'); if(sb) sb.onclick=()=>go('shop');
   }
   function burst(el,c){ for(let k=0;k<c;k++){ const s=document.createElement('span'); s.className='spark';
     s.textContent=['✨','💚','🌟','💫','🌈'][Math.floor(Math.random()*5)];
@@ -660,19 +658,19 @@
     const catchHtml=p.catch.length?('<div class="catchup">📌 '+p.catch.map(d=>{const x=fromIso(d);return (x.getMonth()+1)+'/'+x.getDate()+'('+DOW1[x.getDay()]+')';}).join('・')+' の ぶんが まだだよ。<b>3もんだけ</b>で OK!'+
       p.catch.map(d=>'<button data-c="'+d+'">'+(fromIso(d).getMonth()+1)+'/'+fromIso(d).getDate()+'のぶんを いれる</button>').join(' ')+'</div>'):'';
     const goalBtn=p.goalNeeded?'<button class="bigbtn goal" id="go-goal2"><span class="e">🎯</span><span>こんしゅうの めあてを きめよう</span><span class="todo">まだ</span></button>':'';
-    const rw=pendingRewards();
-    const rewardHtml=rw.length?('<button class="rewardbtn" id="reward">🎁 '+(+rw[0].ym.slice(5))+'がつの ごほうび！ スター '+rw[0].stars+'こを うけとる →</button>'):'';
-    const bs=buddyStage();
+    const bs=buddyStage(), need=nextStarNeed(S.buddy), have=S.care[S.buddy]||0, isMax=need===0;
+    const coinbar='<div class="coinbar"><span>🪙 もっている おかね</span><b>'+S.coins+' コイン</b></div>';
     const buddyBox='<div class="buddybox"><div class="bchar">'+charVisual(S.buddy,bs,54)+'</div>'+
-      '<div class="btxt"><b>'+charDef(S.buddy).name+'</b><span class="bstars">⭐ スター '+S.stars+'こ</span>'+
-      '<div style="font-size:11px;color:#4f7d3f">きろくすると そだつよ</div></div>'+
-      '<div class="bbtns"><button class="minibtn gc" id="go-gacha">🎁 ガチャ</button>'+
+      '<div class="btxt"><b>'+charDef(S.buddy).name+' <span style="font-size:11px;color:#4f7d3f">Lv.'+(bs+1)+'</span></b>'+
+      '<span class="bstars">⭐ '+have+'こ あげた</span>'+
+      '<div style="font-size:11px;color:#4f7d3f">'+(isMax?'さいだいまで そだったよ！':'あと ⭐'+need+'こで レベルアップ')+'</div></div>'+
+      '<div class="bbtns"><button class="minibtn gc" id="go-shop">🛒 ショップ</button>'+
       '<button class="minibtn" id="go-nakama">👥 なかま</button></div></div>';
     app.innerHTML=
       '<button class="gear" id="gear">⚙️</button>'+
       '<div class="date">'+jdate(t)+(p.school?'':' ・がっこうは おやすみ')+'</div>'+
       '<div class="home-greet">'+greet+'、'+(S.name||'')+'さん！</div>'+
-      rewardHtml+
+      coinbar+
       '<div class="bigbtns">'+big+goalBtn+'</div>'+catchHtml+
       '<div class="subbtns" style="margin-top:12px">'+
       '<button class="subbtn" id="go-week"><span class="e">📊</span>わたしの<br>1しゅうかん</button>'+
@@ -688,47 +686,64 @@
     if(k) k.onclick=()=>startFlow(KAERI_FLOW,'k',ti,'かえり','b-kaeri',1);
     document.getElementById('go-week').onclick=()=>go('week');
     document.getElementById('go-goal').onclick=()=>go('goal');
-    document.getElementById('go-gacha').onclick=()=>go('gacha');
+    document.getElementById('go-shop').onclick=()=>go('shop');
     document.getElementById('go-nakama').onclick=()=>go('nakama');
     const g2=document.getElementById('go-goal2'); if(g2) g2.onclick=()=>go('goal');
-    const rb=document.getElementById('reward'); if(rb) rb.onclick=()=>{
-      const r=rw[0]; S.stars+=r.stars; S.converted[r.ym]=true; ev({t:'reward',ym:r.ym,stars:r.stars}); save(); go('reward',r); };
     document.getElementById('mode').onclick=()=>{
       S.overrides[ti]=p.school?'holiday':'school'; ev({t:'mode',d:ti,to:S.overrides[ti]}); go('home'); };
     app.querySelectorAll('[data-c]').forEach(b=>{ b.onclick=()=>{
       startFlow(CATCH_FLOW(b.dataset.c),'c',b.dataset.c,'あとから きろく','b-hol',1); }; });
   }
 
-  /* ============ 月末ごほうび画面 ============ */
-  function renderReward(){
-    const r=(scr.arg)||{ym:'',stars:0,stamps:0};
-    app.innerHTML='<div class="done"><div class="big">🎁</div>'+
-      '<h3>'+(+String(r.ym).slice(5))+'がつ、よく がんばったね！</h3>'+
-      '<p>スタンプ '+ (r.stamps||stampsInMonth(r.ym)) +'こ あつめたよ</p>'+
-      '<div class="stampcard" style="font-size:18px">⭐ スター '+r.stars+'こ ゲット！</div>'+
-      '<p style="margin-top:12px">ガチャで あたらしい なかまに あえるよ</p>'+
-      '<button class="feedbtn" id="tog">🎁 ガチャを まわす</button>'+HOMEBTN+'</div>';
-    bindHome();
-    document.getElementById('tog').onclick=()=>go('gacha');
+  /* ============ ショップ画面(スターを かう・ガチャ) ============ */
+  function renderShop(){
+    const bs=buddyStage(), have=S.care[S.buddy]||0, need=nextStarNeed(S.buddy), isMax=need===0;
+    const canStar=S.coins>=STAR_COST, canGacha=S.coins>=GACHA_COST;
+    app.innerHTML='<div class="adult"><h2>🛒 ショップ</h2>'+
+      '<div class="coinbar"><span>🪙 もっている おかね</span><b id="shcoin">'+S.coins+' コイン</b></div>'+
+      '<div class="a-sec" style="text-align:center"><h4>いま そだてている なかま</h4>'+
+      '<div style="font-size:54px" id="shchar">'+charVisual(S.buddy,bs,54)+'</div>'+
+      '<div style="font-weight:700">'+charDef(S.buddy).name+' <span style="font-size:12px;color:#4f7d3f">Lv.'+(bs+1)+'</span></div>'+
+      '<div id="shprog" style="font-size:12px;color:#6b675c;margin:4px 0">⭐ '+have+'こ あげた／'+(isMax?'さいだいレベル！':'あと ⭐'+need+'こで レベルアップ')+'</div>'+
+      '<button class="feedbtn" id="buystar" '+(canStar?'':'disabled style="opacity:.4"')+'>⭐ スターを 1こ かって あげる('+STAR_COST+'コイン)</button>'+
+      '<div class="a-note">おかねで スターを かって、そだてたい なかまに あげると レベルアップするよ</div></div>'+
+      '<div class="a-sec" style="text-align:center"><h4>🎁 ガチャ('+GACHA_COST+'コイン)</h4>'+
+      '<div style="font-size:12px;color:#8d887a">あたらしい なかまに あえるよ。でも あたらない ことも あるよ('+S.owned.length+'/'+CHARS.length+')</div>'+
+      '<button class="a-cta" id="togacha" style="margin-top:8px" '+(canGacha?'':'disabled')+'>🎰 ガチャを まわす</button></div>'+
+      '<button class="a-cta gray" id="back">← ホームへ</button></div>';
+    document.getElementById('back').onclick=()=>go('home');
+    document.getElementById('togacha').onclick=()=>go('gacha');
+    const bsb=document.getElementById('buystar');
+    bsb.onclick=()=>{
+      const r=buyStar(); if(!r) return;
+      const bs2=buddyStage(), have2=S.care[S.buddy]||0, need2=nextStarNeed(S.buddy), max2=need2===0;
+      document.getElementById('shcoin').textContent=S.coins+' コイン';
+      const ch=document.getElementById('shchar'); ch.innerHTML=charVisual(S.buddy,bs2,54);
+      document.getElementById('shprog').innerHTML='⭐ '+have2+'こ あげた／'+(max2?'さいだいレベル！':'あと ⭐'+need2+'こで レベルアップ');
+      if(r.leveledUp){ ch.classList.remove('wig'); void ch.offsetWidth; ch.classList.add('wig'); burst(ch,8);
+        document.getElementById('shprog').innerHTML='🎉 レベルアップ！ Lv.'+(bs2+1)+' に なったよ！'; }
+      const can=S.coins>=STAR_COST; bsb.disabled=!can; bsb.style.opacity=can?1:.4;
+      const tg=document.getElementById('togacha'); tg.disabled=S.coins<GACHA_COST;
+    };
   }
 
   /* ============ ガチャ画面 ============ */
   function renderGacha(){
-    const can=S.stars>=GACHA_COST;
+    const can=S.coins>=GACHA_COST;
     app.innerHTML='<div class="adult" style="text-align:center">'+
       '<h2>🎁 ガチャ</h2>'+
-      '<div style="font-size:13px;color:#6b675c;margin:6px 0">⭐ もっている スター:<b id="gstar">'+S.stars+'</b>こ</div>'+
-      '<div style="font-size:12px;color:#8d887a;margin-bottom:12px">1かい '+GACHA_COST+'スターで あたらしい なかまに あえるよ('+S.owned.length+'/'+CHARS.length+' なかま)</div>'+
+      '<div class="coinbar"><span>🪙 もっている おかね</span><b id="gcoin">'+S.coins+' コイン</b></div>'+
+      '<div style="font-size:12px;color:#8d887a;margin:8px 0 12px">1かい '+GACHA_COST+'コイン。あたらしい なかまに あえるよ。でも <b>あたらない ことも あるよ</b>('+S.owned.length+'/'+CHARS.length+')</div>'+
       '<div id="gresult" style="min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center">🎁</div>'+
-      '<button class="feedbtn" id="pull" '+(can?'':'disabled style="opacity:.4"')+'>🎰 ガチャを まわす('+GACHA_COST+'スター)</button>'+
-      '<div id="gmsg" style="font-size:11px;color:#8d887a;margin-top:6px">'+(can?'':'スターが たりないよ。きろくを つづけて 月末に あつめよう')+'</div>'+
-      '<button class="a-cta gray" id="back" style="margin-top:14px">← ホームへ</button></div>';
-    document.getElementById('back').onclick=()=>go('home');
+      '<button class="feedbtn" id="pull" '+(can?'':'disabled style="opacity:.4"')+'>🎰 ガチャを まわす('+GACHA_COST+'コイン)</button>'+
+      '<div id="gmsg" style="font-size:11px;color:#8d887a;margin-top:6px">'+(can?'':'コインが たりないよ。きろくを つづけて ためよう')+'</div>'+
+      '<button class="a-cta gray" id="back" style="margin-top:14px">← もどる</button></div>';
+    document.getElementById('back').onclick=()=>go('shop');
     const pb=document.getElementById('pull');
     pb.onclick=()=>{
       const res=gachaPull(); if(!res){ return; }
       pb.disabled=true; pb.style.opacity=.4;
-      document.getElementById('gstar').textContent=S.stars;
+      document.getElementById('gcoin').textContent=S.coins+' コイン';
       const box=document.getElementById('gresult');
       box.style.fontSize='60px'; let n=0;
       const pool=CHARS.filter(c=>c.st).map(c=>c.st[2]);
@@ -736,14 +751,15 @@
       setTimeout(()=>{ clearInterval(spin); box.style.fontSize='';
         if(res.isNew){ const c=charDef(res.id);
           box.innerHTML='<div style="font-size:64px">'+charVisual(res.id,2,64)+'</div>'+
-            '<div style="font-size:16px;font-weight:700;margin-top:6px;color:var(--meate)">✨ '+c.name+' が なかまに なった！</div>'+
+            '<div style="font-size:16px;font-weight:700;margin-top:6px;color:var(--meate)">✨ あたり！ '+c.name+' が なかまに なった！</div>'+
             '<button class="minibtn" id="setb" style="margin-top:8px">この子を そだてる</button>';
           document.getElementById('setb').onclick=()=>{ S.buddy=res.id; ev({t:'buddy',id:res.id}); save(); go('home'); };
-        } else { box.innerHTML='<div style="font-size:15px">🎉 みんな なかまに いるよ！<br>スター +'+res.bonus+' もらったよ ⭐</div>'; }
-        const can2=S.stars>=GACHA_COST;
-        pb.textContent='🎰 もう1かい まわす('+GACHA_COST+'スター)';
+        } else if(res.allOwned){ box.innerHTML='<div style="font-size:15px">🎉 みんな なかまに いるよ！<br>コインが '+res.back+' もどってきたよ 🪙</div>';
+        } else { box.innerHTML='<div style="font-size:40px">💧</div><div style="font-size:15px">ざんねん…はずれ！<br>コインが '+res.back+' もどってきたよ 🪙</div>'; }
+        document.getElementById('gcoin').textContent=S.coins+' コイン';
+        const can2=S.coins>=GACHA_COST;
+        pb.textContent='🎰 もう1かい まわす('+GACHA_COST+'コイン)';
         pb.disabled=!can2; pb.style.opacity=can2?1:.4;
-        document.getElementById('gstar').textContent=S.stars;
       },900);
     };
   }
@@ -944,7 +960,7 @@
       '<div style="font-size:11px;color:#8d887a">仮名ID:'+(S.server.child||'(初回送信時に自動生成)')+' / 未送信:'+unsynced().length+'件'+(syncMsg?(' / '+syncMsg):'')+'</div>'+
       '<div style="font-size:11px;color:#8d887a">※サーバに送るのは仮名IDと回答だけ。<b>なまえは送信されません</b></div>'+
       '<button class="a-cta" id="svsave">設定を保存して いま送信</button></div>'+
-      '<div class="a-sec"><h4>状態</h4><div>なまえ:'+(S.name||'未設定')+' / イベント数:'+S.events.length+' / スター:'+S.stars+'</div>'+
+      '<div class="a-sec"><h4>状態</h4><div>なまえ:'+(S.name||'未設定')+' / イベント数:'+S.events.length+' / コイン:'+S.coins+' / なかま:'+S.owned.length+'</div>'+
       '<div style="margin-top:6px"><input type="text" id="nm" placeholder="なまえ(ひらがな)" value="'+(S.name||'')+'"></div>'+
       '<div style="margin-top:6px"><input type="text" id="pin2" inputmode="numeric" placeholder="おとな用パスコードを変える(現在:'+S.pin+')"></div>'+
       '<button class="a-cta" id="svnm">保存</button></div>'+
@@ -1007,17 +1023,17 @@
       if(pa===0){ ev({t:'ans',d:di,s:'m',q:'M5a',v:QV,a:r(3),lat:700}); ev({t:'ans',d:di,s:'m',q:'M5b',v:QV,a:1+r(3),lat:700});
         const c=r(4); ev({t:'ans',d:di,s:'m',q:'M5c',v:QV,a:c,lat:700}); if(c===1) ev({t:'ans',d:di,s:'m',q:'M5d',v:QV,a:r(3),lat:600}); }
       ev({t:'ans',d:di,s:'m',q:'M6',v:QV,a:r(10)<3?0:1,lat:600});
-      ev({t:'complete',s:'m',d:di}); S.care[S.buddy]=(S.care[S.buddy]||0)+1; ev({t:'care',id:S.buddy});
+      ev({t:'complete',s:'m',d:di}); S.coins+=COIN_PER_REC; ev({t:'coin',n:COIN_PER_REC});
       if(sch){
         ev({t:'ans',d:di,s:'k',q:'K1',v:QV,a:r(3),lat:700});
         const k2=r(10)<5?0:1; ev({t:'ans',d:di,s:'k',q:'K2',v:QV,a:k2,lat:700});
         if(k2===0) ev({t:'ans',d:di,s:'k',q:'K2a',v:QV,a:r(4),lat:700});
         else { ev({t:'ans',d:di,s:'k',q:'K2b',v:QV,a:r(4),lat:700}); ev({t:'ans',d:di,s:'k',q:'K2c',v:QV,a:r(5),lat:700}); }
         const w=r(3); ev({t:'ans',d:di,s:'k',q:'K3',v:QV,a:w,lat:600}); if(w===1) ev({t:'ans',d:di,s:'k',q:'K3a',v:QV,a:r(3),lat:600});
-        ev({t:'complete',s:'k',d:di}); S.care[S.buddy]=(S.care[S.buddy]||0)+1; ev({t:'care',id:S.buddy});
+        ev({t:'complete',s:'k',d:di}); S.coins+=COIN_PER_REC; ev({t:'coin',n:COIN_PER_REC});
       }
     }
-    S.stars+=12;   /* デモ:ガチャを試せるように初期スターを付与 */
+    S.care[S.buddy]=(S.care[S.buddy]||0)+7;   /* デモ:バディを少し育てた状態に */
     save();
   }
 
@@ -1047,7 +1063,7 @@
       case 'goal': renderGoal(); break;
       case 'gacha': renderGacha(); break;
       case 'nakama': renderNakama(); break;
-      case 'reward': renderReward(); break;
+      case 'shop': renderShop(); break;
       case 'data': renderData(); break;
       default: renderHome();
     }
