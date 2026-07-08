@@ -102,6 +102,17 @@
     border-radius:14px; padding:9px 14px; display:flex; justify-content:space-between; align-items:center; }
   .coinbar span{ font-size:12px; font-weight:700; color:#8a6516; }
   .coinbar b{ font-size:17px; color:#b06a12; font-variant-numeric:tabular-nums; }
+  /* さいふ(コイン＋スター)＋スターをあげるボタン */
+  .walletrow{ display:flex; gap:8px; margin:6px 0 4px; align-items:stretch; }
+  .wchip{ flex:1; border-radius:12px; padding:7px 12px; display:flex; justify-content:space-between; align-items:center; }
+  .wchip span{ font-size:11px; font-weight:700; }
+  .wchip b{ font-size:17px; font-variant-numeric:tabular-nums; }
+  .wchip.coin{ background:linear-gradient(135deg,#fdf3d8,#f8e3a8); border:2px solid #ecd88a; }
+  .wchip.coin span{ color:#8a6516; } .wchip.coin b{ color:#b06a12; }
+  .wchip.star{ background:linear-gradient(135deg,#fdf0e4,#f7d9b8); border:2px solid #ecc79e; }
+  .wchip.star span{ color:#a05a16; } .wchip.star b{ color:#c2410c; }
+  .wgive{ flex:none; border:none; border-radius:12px; padding:7px 14px; background:var(--asa); color:#fff;
+    font-size:13px; font-weight:700; box-shadow:0 3px 8px rgba(232,148,15,.3); }
   .coinreward{ background:#fdf3d8; border:2px solid #ecd88a; border-radius:16px; padding:12px 20px;
     font-size:20px; font-weight:700; color:#b06a12; display:inline-block; }
   .coinreward .coined{ font-size:13px; font-weight:400; color:#8a6516; margin-top:4px; }
@@ -298,11 +309,12 @@
         d.weather=d.weather||{}; d.region=d.region||{lat:35.17,lon:136.91};
         d.pin=d.pin||'1122';
         d.owned=d.owned||['flower']; d.buddy=d.buddy||'flower';
-        d.care=d.care||{flower:0}; d.coins=(d.coins!=null?d.coins:(d.stars||0)*10);
+        d.care=d.care||{flower:0}; d.coins=(d.coins!=null?d.coins:0);
+        d.stars=(d.starsHeld!=null?d.starsHeld:(typeof d.stars==='number'?0:0));  /* もっているスター(財布) */
         return d; } }catch(e){}
     return {name:'', setup:false, events:[], goals:{}, overrides:{},
       server:{url:'',token:'',child:''}, weather:{}, region:{lat:35.17,lon:136.91}, pin:'1122',
-      owned:['flower'], buddy:'flower', care:{flower:0}, coins:0};
+      owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0};
   }
   function save(){ localStorage.setItem(KEY, JSON.stringify(S)); }
   function uid(){ return (crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2)); }
@@ -390,7 +402,8 @@
   function charDef(id){ return CHARS.find(c=>c.id===id)||CHARS[0]; }
   /* ====== おかね(コイン)とスターの けいざい(お金の勉強をかねる) ======
      ・きろく1かい = COIN_PER_REC コイン(まいにち たまる)
-     ・スター1こ = STAR_COST コイン → いま そだてている子に あげてレベルアップ
+     ・コインで スターを かう(STAR_COST コイン→スター1こ、S.starsに たまる)
+     ・スターを なかまに あげる(スター1こ → いまの子が レベルに近づく)
      ・ガチャ = GACHA_COST コイン、あたると 新しいなかま、はずれもある */
   const COIN_PER_REC=10, STAR_COST=10, GACHA_COST=40, GACHA_WIN=0.6;
   const STAGE_TH=[0,5,12,22,35];  /* あげたスター数→成長ステージ(0..4) */
@@ -402,10 +415,14 @@
     if(c.svg){ return '<span style="display:inline-block;transform:scale('+(size/64)+')">'+flowerSVG(stg)+'</span>'; }
     return '<span style="font-size:'+size+'px;line-height:1;display:inline-block">'+c.st[Math.min(4,stg)]+'</span>';
   }
-  function buyStar(){   /* コインで スターを1こ かって いまのバディに あげる */
+  function buyStar(){   /* コインで スターを1こ かう(S.starsに ためる) */
     if(S.coins<STAR_COST) return false;
-    const before=buddyStage(); S.coins-=STAR_COST; S.care[S.buddy]=(S.care[S.buddy]||0)+1;
-    ev({t:'buystar',id:S.buddy}); save();
+    S.coins-=STAR_COST; S.stars++; ev({t:'buystar'}); save(); return true;
+  }
+  function giveStar(){  /* もっているスターを1こ いまのバディに あげる */
+    if(S.stars<1) return false;
+    const before=buddyStage(); S.stars--; S.care[S.buddy]=(S.care[S.buddy]||0)+1;
+    ev({t:'givestar',id:S.buddy}); save();
     return {leveledUp: buddyStage()>before};
   }
   function gachaPull(){
@@ -617,8 +634,12 @@
   function renderFlow(){
     const fs=flowState, items=visible(fs);
     if(fs.idx>=items.length){
-      const already=completed(fs.d,fs.sess);   /* やり直し入力では二重にカウントしない */
-      ev({t:'complete',s:fs.sess,d:fs.d});     /* 1記録=1スタンプ(カレンダーに反映) */
+      const isRecon=fs.sess==='c';   /* あとから記録・カレンダー日タップの入れ直し(再構成) */
+      const already= isRecon ? (completed(fs.d,'m')||completed(fs.d,'k')) : completed(fs.d,fs.sess);
+      if(isRecon){   /* 朝のスタンプ、学校ありなら帰りも(カレンダー編集は学校ゲートで判定) */
+        ev({t:'complete',s:'m',d:fs.d});
+        if(fs.gates.sch===true) ev({t:'complete',s:'k',d:fs.d});
+      } else ev({t:'complete',s:fs.sess,d:fs.d});
       let earned=0;
       if(!already){
         if(G1){ S.care[S.buddy]=(S.care[S.buddy]||0)+1; ev({t:'care',id:S.buddy}); earned='grow'; }
@@ -651,14 +672,14 @@
       if(it.kind==='cnt') extra='<span class="cnt">'+it.cnt[i]+'</span>';
       b.innerHTML=ic+extra+'<span>'+T(o[1])+'</span>';
       b.onclick=()=>{ b.classList.add('picked');
-        ev({t:'ans',d:fs.d,s:fs.sess,q:it.id,v:QV,a:i,lat:Date.now()-fs.shownAt});
+        ev({t:'ans',d:fs.d,s:it.sess||fs.sess,q:it.id,v:QV,a:i,lat:Date.now()-fs.shownAt});
         if(it.gate) fs.gates[it.gate]=it.openIdx.includes(i);
         if(it.multi) it.multi.forEach(m=>{ fs.gates[m.id]=m.openIdx.includes(i); });
         setTimeout(()=>{ fs.hist.push(fs.idx); fs.idx++; renderFlow(); },220); };
       box.appendChild(b);
     });
     if(it.forget){ const f=document.createElement('button'); f.className='opt forget'; f.textContent='おぼえてない';
-      f.onclick=()=>{ ev({t:'ans',d:fs.d,s:fs.sess,q:it.id,v:QV,a:'DK',lat:Date.now()-fs.shownAt});
+      f.onclick=()=>{ ev({t:'ans',d:fs.d,s:it.sess||fs.sess,q:it.id,v:QV,a:'DK',lat:Date.now()-fs.shownAt});
         fs.hist.push(fs.idx); fs.idx++; renderFlow(); };
       box.appendChild(f); }
     document.getElementById('back').onclick=()=>{
@@ -706,13 +727,50 @@
       let s='';
       if(!fut){ if(sch){ if(completed(di,'m')) s+='🌞'; if(completed(di,'k')) s+='🏫'; }
         else { if(completed(di,'m')) s+='🏅'; } }
-      cells+='<div class="cal-d'+(di===tISO?' today':'')+(fut?' fut':'')+(dd.getDay()===0?' sun':(dd.getDay()===6?' sat':''))+'">'+
+      cells+='<div class="cal-d'+(di===tISO?' today':'')+(fut?' fut':'')+(dd.getDay()===0?' sun':(dd.getDay()===6?' sat':''))+'"'+
+        (fut?'':' data-cal="'+di+'"')+'>'+
         '<span class="cal-n">'+dn+'</span><span class="cal-s">'+s+'</span></div>';
     }
     const head=['日','月','火','水','木','金','土'].map((h,i)=>'<div class="cal-h'+(i===0?' sun':(i===6?' sat':''))+'">'+h+'</div>').join('');
     return '<div class="calwrap"><div class="calhd">📅 '+(m+1)+'がつの きろく カレンダー</div>'+
       '<div class="calgrid">'+head+cells+'</div>'+
-      '<div class="calleg">🌞あさ ・ 🏫かえり ・ 🏅休みの日</div></div>';
+      '<div class="calleg">🌞あさ ・ 🏫かえり ・ 🏅休みの日 ／ 👆日を タップして きろく・なおす</div></div>';
+  }
+  /* カレンダーの日タップ → その日の きろく/なおし */
+  function bindCalendar(){
+    app.querySelectorAll('[data-cal]').forEach(el=>{ el.style.cursor='pointer';
+      el.onclick=()=>startFlow(editDayFlow(el.dataset.cal),'c',el.dataset.cal,'その日の きろく','b-hol',1); }); }
+  /* 過去/今日の1日をまるごと入れ直すフロー(全学年)。「この日は 学校が あった？」から始まる */
+  function editDayFlow(di){
+    const x=fromIso(di), prev=addDays(x,-1);
+    const dl=dt=>(dt.getMonth()+1)+'/'+dt.getDate()+'('+DOW1[dt.getDay()]+')';
+    const head=[{id:'ATT2',icon:'🏫',q:dl(x)+'は 学校が あった？',opts:[['🏫','あった'],['🏠','なかった(おやすみ)']],gate:'sch',openIdx:[0]}];
+    if(G1){
+      const morning=[{id:'M1',icon:'🌞',q:'その日の からだの ちょうしは？',opts:[['😊','げんき'],['😕','ちょっと わるい'],['🤕','ケガ・びょうきで うんどう できない']]},
+        {id:'G1OUT',icon:'🌳',q:dl(x)+'、そとで あそんだ？',opts:[['🌳','あそんだ'],['🏠','あそばなかった']]}];
+      const kaeri=KAERI_G1.map(q=>Object.assign({},q,{sess:'k',needs:(q.needs||[]).concat('sch')}));
+      /* K1にも needs sch を付ける(K1は元々 needs なし) */
+      kaeri[0]=Object.assign({},KAERI_G1[0],{sess:'k',needs:['sch']});
+      return head.concat(morning, kaeri);
+    }
+    const morning=[
+      {id:'M1',icon:'🌞',q:'その日の からだの ちょうしは？',opts:[['😊','げんき'],['😕','ちょっと わるい'],['🤕','ケガ・びょうきで うんどう できない']]},
+      {id:'M2',illust:'futon',ic:'night',kind:'rail-night',q:dl(prev)+'の よる、なんじごろ ねた？',opts:BED,forget:true},
+      {id:'M3',illust:'sunrise',ic:'morning',kind:'rail-morning',q:dl(x)+'の あさ、なんじごろ おきた？',opts:WAKE,forget:true},
+      {id:'M4',icon:'📺',q:dl(x)+'、ゲーム・どうが・テレビ・スマホを つかった？',opts:[['👀','つかった'],['🙅','つかわなかった']],gate:'st',openIdx:[0]},
+      {id:'M4a',icon:'🎮',kind:'amt',q:'べんきょうでは なくて、あそびの じかんは どれくらい？',needs:['st'],opts:[['','あそびでは つかわなかった'],['','30ぷん くらい'],['','1じかん くらい'],['','2じかん くらい'],['','3じかん いじょう']],amt:[4,22,40,60,82],forget:true},
+      {id:'M5',icon:'🏃',q:dl(x)+'、はしったり あせを かいたりする あそびや うんどうを した？',opts:[['💪','した'],['🙅','しなかった']],gate:'pa',openIdx:[0]},
+      {id:'M5a',icon:'🌳',q:'どこで した？',needs:['pa'],opts:[['🌳','そと'],['🏠','たてものの なか'],['SVG:both','そとと なかの りょうほう']]},
+      {id:'M5c',icon:'👫',q:'だれと あそんだ？',needs:['pa'],opts:[['🧍','ひとりで'],['👫','ともだちと'],['👨‍👩‍👧','かぞく・きょうだいと'],['🧑‍🏫','せんせい・おとなと']],gate:'fr',openIdx:[1]},
+      {id:'M5d',icon:'🔢',kind:'cnt',q:'いっしょに あそんだ ともだちは なんにん？',needs:['pa','fr'],opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●']},
+    ];
+    const kaeri=[
+      {id:'K1',sess:'k',icon:'🕙',q:'なかやすみは そとで あそんだ？',needs:['sch'],opts:[['🌳','そとで あそんだ'],['🏫','なかに いた'],['🚫','なかやすみは なかった']]},
+      {id:'K2',sess:'k',icon:'🍚',q:'ひるやすみは そとで あそんだ？',needs:['sch'],opts:[['🌳','そとで あそんだ'],['🏫','なかに いた'],['🚫','きょうは なかった']],gate:'lp',openIdx:[0,1]},
+      {id:'K3',sess:'k',icon:'👫',q:'ひるやすみは、だれと いることが おおかった？',needs:['sch','lp'],opts:[['🧍','ひとり'],['👫','ともだち'],['🧑‍🏫','せんせい・おとな']],gate:'kfr',openIdx:[1]},
+      {id:'K3a',sess:'k',kind:'cnt',icon:'🔢',q:'いっしょに あそんだ ともだちは なんにん？',needs:['sch','lp','kfr'],opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●']},
+    ];
+    return head.concat(morning, kaeri);
   }
 
   /* ============ ホーム ============ */
@@ -734,18 +792,22 @@
       p.catch.map(d=>'<button data-c="'+d+'">'+(fromIso(d).getMonth()+1)+'/'+fromIso(d).getDate()+'のぶんを いれる</button>').join(' ')+'</div>'):'';
     const goalBtn=(!G1&&p.goalNeeded)?'<button class="bigbtn goal" id="go-goal2"><span class="e">🎯</span><span>'+T('こんしゅうの めあてを きめよう')+'</span><span class="todo">まだ</span></button>':'';
     const bs=buddyStage(), need=nextStarNeed(S.buddy), have=S.care[S.buddy]||0, isMax=need===0;
-    /* 1年生:お金・ショップなし。バディは 記録すると そだつ */
+    /* 1年生:お金・ショップなし。バディは 記録すると そだつ。タップで大きく見える */
     const buddyBox= G1
-      ? '<div class="buddybox"><div class="bchar">'+charVisual(S.buddy,bs,54)+'</div>'+
+      ? '<div class="buddybox" id="tapbuddy"><div class="bchar">'+charVisual(S.buddy,bs,54)+'</div>'+
         '<div class="btxt"><b>'+charDef(S.buddy).name+' <span style="font-size:11px;color:#4f7d3f">Lv.'+(bs+1)+'</span></b>'+
         '<div style="font-size:12px;color:#4f7d3f">きろくすると そだつよ！</div></div></div>'
-      : '<div class="buddybox"><div class="bchar">'+charVisual(S.buddy,bs,54)+'</div>'+
+      : '<div class="buddybox" id="tapbuddy" style="cursor:pointer"><div class="bchar">'+charVisual(S.buddy,bs,54)+'</div>'+
         '<div class="btxt"><b>'+charDef(S.buddy).name+' <span style="font-size:11px;color:#4f7d3f">Lv.'+(bs+1)+'</span></b>'+
         '<span class="bstars">⭐ '+have+'こ あげた</span>'+
-        '<div style="font-size:11px;color:#4f7d3f">'+(isMax?'さいだいまで そだったよ！':'あと ⭐'+need+'こで レベルアップ')+'</div></div>'+
-        '<div class="bbtns"><button class="minibtn gc" id="go-shop">🛒 ショップ</button>'+
-        '<button class="minibtn" id="go-nakama">👥 なかま</button></div></div>';
-    const coinbar= G1 ? '' : '<div class="coinbar"><span>🪙 もっている おかね</span><b>'+S.coins+' コイン</b></div>';
+        '<div style="font-size:11px;color:#4f7d3f">'+(isMax?'さいだいまで そだったよ！':'あと ⭐'+need+'こで レベルアップ')+'</div>'+
+        '<div style="font-size:11px;color:#2e7bb0;font-weight:700;margin-top:2px">👆 タップして スターを あげる</div></div></div>';
+    /* コイン＋スター残高＋「スターをあげる」ボタン(1年生は無し) */
+    const coinbar= G1 ? '' :
+      '<div class="walletrow">'+
+      '<div class="wchip coin"><span>🪙 おかね</span><b>'+S.coins+'</b></div>'+
+      '<div class="wchip star"><span>⭐ スター</span><b>'+S.stars+'</b></div>'+
+      '<button class="wgive" id="go-shop">⭐ スターを あげる</button></div>';
     const subbtns= G1
       ? '<div class="subbtns" style="margin-top:12px"><button class="subbtn" id="go-week" style="grid-column:1/3"><span class="e">📅</span>これまでの きろく</button></div>'
       : '<div class="subbtns" style="margin-top:12px">'+
@@ -773,44 +835,61 @@
     document.getElementById('go-week').onclick=()=>go('week');
     const gg=document.getElementById('go-goal'); if(gg) gg.onclick=()=>go('goal');
     const gsh=document.getElementById('go-shop'); if(gsh) gsh.onclick=()=>go('shop');
-    const gnk=document.getElementById('go-nakama'); if(gnk) gnk.onclick=()=>go('nakama');
+    const tb=document.getElementById('tapbuddy'); if(tb&&!G1) tb.onclick=()=>go('shop');
     const g2=document.getElementById('go-goal2'); if(g2) g2.onclick=()=>go('goal');
     document.getElementById('mode').onclick=()=>{
       S.overrides[ti]=p.school?'holiday':'school'; ev({t:'mode',d:ti,to:S.overrides[ti]}); go('home'); };
     app.querySelectorAll('[data-c]').forEach(b=>{ b.onclick=()=>{
       startFlow(CATCH_FLOW(b.dataset.c),'c',b.dataset.c,'あとから きろく','b-hol',1); }; });
+    bindCalendar();
   }
 
-  /* ============ ショップ画面(スターを かう・ガチャ) ============ */
+  /* ============ そだてる画面(スターを あげる・かう・ガチャ) ============ */
+  function refreshShop(levelMsg){
+    const bs=buddyStage(), have=S.care[S.buddy]||0, need=nextStarNeed(S.buddy), max=need===0;
+    document.getElementById('shcoin').textContent=S.coins;
+    document.getElementById('shstar').textContent=S.stars;
+    const ch=document.getElementById('shchar'); ch.innerHTML=charVisual(S.buddy,bs,60);
+    document.getElementById('shprog').innerHTML= levelMsg
+      ? '🎉 レベルアップ！ Lv.'+(bs+1)+' に なったよ！'
+      : 'Lv.'+(bs+1)+'／⭐ '+have+'こ あげた／'+(max?'さいだいレベル！':'あと ⭐'+need+'こで レベルアップ');
+    const gv=document.getElementById('give'); gv.disabled=S.stars<1; gv.style.opacity=S.stars<1?.4:1;
+    const by=document.getElementById('buystar'); by.disabled=S.coins<STAR_COST; by.style.opacity=S.coins<STAR_COST?.4:1;
+    const tg=document.getElementById('togacha'); tg.disabled=S.coins<GACHA_COST; tg.style.opacity=S.coins<GACHA_COST?.4:1;
+  }
   function renderShop(){
-    const bs=buddyStage(), have=S.care[S.buddy]||0, need=nextStarNeed(S.buddy), isMax=need===0;
-    const canStar=S.coins>=STAR_COST, canGacha=S.coins>=GACHA_COST;
-    app.innerHTML='<div class="adult"><h2>🛒 ショップ</h2>'+
-      '<div class="coinbar"><span>🪙 もっている おかね</span><b id="shcoin">'+S.coins+' コイン</b></div>'+
+    const bs=buddyStage();
+    app.innerHTML='<div class="adult"><h2>⭐ そだてる</h2>'+
+      '<div class="walletrow" style="margin-bottom:10px">'+
+      '<div class="wchip coin"><span>🪙 おかね</span><b id="shcoin">'+S.coins+'</b></div>'+
+      '<div class="wchip star"><span>⭐ スター</span><b id="shstar">'+S.stars+'</b></div></div>'+
       '<div class="a-sec" style="text-align:center"><h4>いま そだてている なかま</h4>'+
-      '<div style="font-size:54px" id="shchar">'+charVisual(S.buddy,bs,54)+'</div>'+
-      '<div style="font-weight:700">'+charDef(S.buddy).name+' <span style="font-size:12px;color:#4f7d3f">Lv.'+(bs+1)+'</span></div>'+
-      '<div id="shprog" style="font-size:12px;color:#6b675c;margin:4px 0">⭐ '+have+'こ あげた／'+(isMax?'さいだいレベル！':'あと ⭐'+need+'こで レベルアップ')+'</div>'+
-      '<button class="feedbtn" id="buystar" '+(canStar?'':'disabled style="opacity:.4"')+'>⭐ スターを 1こ かって あげる('+STAR_COST+'コイン)</button>'+
-      '<div class="a-note">おかねで スターを かって、そだてたい なかまに あげると レベルアップするよ</div></div>'+
+      '<div class="pet" id="shchar" style="font-size:60px">'+charVisual(S.buddy,bs,60)+'</div>'+
+      '<div style="font-weight:700;margin-top:2px">'+charDef(S.buddy).name+'</div>'+
+      '<div id="shprog" style="font-size:12px;color:#6b675c;margin:4px 0"></div>'+
+      '<button class="feedbtn" id="give">⭐ スターを あげる</button>'+
+      '<div class="a-note">もっている スターを あげると なかまが レベルアップ！</div></div>'+
+      '<div class="a-sec" style="text-align:center"><h4>🪙 コインで スターを かう</h4>'+
+      '<button class="a-cta" id="buystar">⭐ スターを 1こ かう('+STAR_COST+'コイン)</button></div>'+
       '<div class="a-sec" style="text-align:center"><h4>🎁 ガチャ('+GACHA_COST+'コイン)</h4>'+
       '<div style="font-size:12px;color:#8d887a">あたらしい なかまに あえるよ。でも あたらない ことも あるよ('+S.owned.length+'/'+CHARS.length+')</div>'+
-      '<button class="a-cta" id="togacha" style="margin-top:8px" '+(canGacha?'':'disabled')+'>🎰 ガチャを まわす</button></div>'+
+      '<button class="a-cta" id="togacha" style="margin-top:8px">🎰 ガチャを まわす</button>'+
+      '<button class="minibtn" id="tonakama" style="margin-top:8px">👥 なかまを 見る</button></div>'+
       '<button class="a-cta gray" id="back">← ホームへ</button></div>';
     document.getElementById('back').onclick=()=>go('home');
     document.getElementById('togacha').onclick=()=>go('gacha');
-    const bsb=document.getElementById('buystar');
-    bsb.onclick=()=>{
-      const r=buyStar(); if(!r) return;
-      const bs2=buddyStage(), have2=S.care[S.buddy]||0, need2=nextStarNeed(S.buddy), max2=need2===0;
-      document.getElementById('shcoin').textContent=S.coins+' コイン';
-      const ch=document.getElementById('shchar'); ch.innerHTML=charVisual(S.buddy,bs2,54);
-      document.getElementById('shprog').innerHTML='⭐ '+have2+'こ あげた／'+(max2?'さいだいレベル！':'あと ⭐'+need2+'こで レベルアップ');
-      if(r.leveledUp){ ch.classList.remove('wig'); void ch.offsetWidth; ch.classList.add('wig'); burst(ch,8);
-        document.getElementById('shprog').innerHTML='🎉 レベルアップ！ Lv.'+(bs2+1)+' に なったよ！'; }
-      const can=S.coins>=STAR_COST; bsb.disabled=!can; bsb.style.opacity=can?1:.4;
-      const tg=document.getElementById('togacha'); tg.disabled=S.coins<GACHA_COST;
+    document.getElementById('tonakama').onclick=()=>go('nakama');
+    document.getElementById('buystar').onclick=()=>{ if(buyStar()) refreshShop(false); };
+    document.getElementById('give').onclick=()=>{
+      const r=giveStar(); if(!r) return;
+      const ch=document.getElementById('shchar');
+      /* 毎回:スターが飛んで なかまに吸い込まれるアニメーション */
+      const s=document.createElement('span'); s.className='fedstar'; s.textContent='⭐';
+      ch.appendChild(s);
+      ch.classList.remove('wig'); void ch.offsetWidth; ch.classList.add('wig'); burst(ch, r.leveledUp?10:4);
+      setTimeout(()=>{ s.remove(); refreshShop(r.leveledUp); },850);
     };
+    refreshShop(false);
   }
 
   /* ============ ガチャ画面 ============ */
@@ -895,6 +974,7 @@
         '<div class="card" style="text-align:center;margin-top:10px">いま そだてている なかま<div style="font-size:54px;margin-top:4px">'+charVisual(S.buddy,buddyStage(),54)+'</div><div style="font-weight:700">'+charDef(S.buddy).name+' Lv.'+(buddyStage()+1)+'</div></div>'+
         '<div class="backrow"><button class="backbtn" id="back">← ホームへ</button></div>';
       document.getElementById('back').onclick=()=>go('home');
+      bindCalendar();
       return;
     }
     const seg='<div class="seg"><button id="w-n" class="'+(mode==='now'?'on':'')+'">'+T('こんしゅう')+'</button>'+
@@ -1064,7 +1144,7 @@
       '<div style="font-size:11px;color:#8d887a">仮名ID:'+(S.server.child||'(初回送信時に自動生成)')+' / 未送信:'+unsynced().length+'件'+(syncMsg?(' / '+syncMsg):'')+'</div>'+
       '<div style="font-size:11px;color:#8d887a">※サーバに送るのは仮名IDと回答だけ。<b>なまえは送信されません</b></div>'+
       '<button class="a-cta" id="svsave">設定を保存して いま送信</button></div>'+
-      '<div class="a-sec"><h4>状態</h4><div>なまえ:'+(S.name||'未設定')+' / イベント数:'+S.events.length+' / コイン:'+S.coins+' / なかま:'+S.owned.length+'</div>'+
+      '<div class="a-sec"><h4>状態</h4><div>なまえ:'+(S.name||'未設定')+' / イベント数:'+S.events.length+' / コイン:'+S.coins+' / スター:'+S.stars+' / なかま:'+S.owned.length+'</div>'+
       '<div style="margin-top:6px"><input type="text" id="nm" placeholder="なまえ(ひらがな)" value="'+(S.name||'')+'"></div>'+
       '<div style="margin-top:6px"><input type="text" id="pin2" inputmode="numeric" placeholder="おとな用パスコードを変える(現在:'+S.pin+')"></div>'+
       '<button class="a-cta" id="svnm">保存</button></div>'+
@@ -1140,7 +1220,7 @@
         if(G1){ S.care[S.buddy]=(S.care[S.buddy]||0)+1; } else { S.coins+=COIN_PER_REC; ev({t:'coin',n:COIN_PER_REC}); }
       }
     }
-    if(!G1){ S.care[S.buddy]=(S.care[S.buddy]||0)+7; }   /* デモ:バディを少し育てた状態に */
+    if(!G1){ S.care[S.buddy]=(S.care[S.buddy]||0)+7; S.stars+=3; }   /* デモ:バディを少し育てた状態＋スター3こ */
     save();
   }
 
@@ -1150,9 +1230,9 @@
       '<div style="font-size:52px">🌱</div><h2>まいにち きろく</h2>'+
       '<div class="gradebadge" style="position:static;display:inline-block;margin:4px 0">'+GRADES[GRADE]+'よう</div>'+
       '<p style="color:#8d887a;font-size:13px">プロトタイプ版・データはこの端末の中だけに保存されます</p>'+
-      '<div style="text-align:left;margin:16px 0 8px;font-weight:700">なまえを おしえてね</div>'+
-      '<input type="text" id="nm" placeholder="ひらがなで にゅうりょく">'+
-      '<button class="feedbtn" id="ok" style="margin-top:16px">はじめる！</button></div>';
+      '<div style="text-align:left;margin:16px 0 8px;font-weight:700">'+(G46?'名前を おしえてね':'なまえを おしえてね')+'</div>'+
+      '<input type="text" id="nm" placeholder="'+(G46?'名前(漢字も OK)':'ひらがなで にゅうりょく')+'">'+
+      '<button class="feedbtn" id="ok" style="margin-top:16px">'+(G46?'はじめる！':'はじめる！')+'</button></div>';
     document.getElementById('ok').onclick=()=>{
       const v=document.getElementById('nm').value.trim();
       if(!v){ document.getElementById('nm').focus(); return; }
