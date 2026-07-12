@@ -68,6 +68,11 @@
     @keyframes pop{ from{opacity:1; transform:translateY(0) scale(.7)} to{opacity:0; transform:translateY(-36px) scale(1.5)} }
     .fedstar{ position:absolute; left:50%; top:-24px; font-size:36px; animation:feedfly .85s ease forwards; pointer-events:none; z-index:2; }
     @keyframes feedfly{ 0%{transform:translate(-50%,-30px) scale(1.6);opacity:1} 60%{transform:translate(-50%,34px) scale(.9);opacity:1} 100%{transform:translate(-50%,40px) scale(.1);opacity:0} }
+    /* スター購入時:ボタンからスターが飛び出す＋残高チップがふくらむ */
+    .buypop{ position:absolute; left:50%; top:8px; font-size:30px; animation:buyfly .8s ease forwards; pointer-events:none; z-index:2; }
+    @keyframes buyfly{ 0%{transform:translate(-50%,0) scale(.4);opacity:0} 30%{transform:translate(-50%,-22px) scale(1.5);opacity:1} 100%{transform:translate(-50%,-70px) scale(1);opacity:0} }
+    .gotstar{ animation:chippulse .55s ease; }
+    @keyframes chippulse{ 0%{transform:scale(1)} 40%{transform:scale(1.22)} 100%{transform:scale(1)} }
   }
 
   .home-greet{ font-size:22px; font-weight:700; margin:8px 0 2px; }
@@ -79,6 +84,11 @@
   .bigbtn.asa{ background:var(--asa); } .bigbtn.kaeri{ background:var(--kaeri); }
   .bigbtn.hol{ background:var(--meate); } .bigbtn.goal{ background:var(--brand); }
   .bigbtn.off{ background:#d9d4c5; color:#8d887a; }
+  /* 入力済みの記録ボタン:グレーにして「済み」を一目で分かるように */
+  .bigbtn.recdone{ background:#e3dfd2; color:#8d887a; box-shadow:none; }
+  .bigbtn.recdone .e{ filter:grayscale(1); opacity:.65; }
+  .bigbtn.recdone small{ color:#a49e8d; }
+  .bigbtn .okpill{ margin-left:auto; flex:none; background:#fff; color:#4f7d3f; font-size:11px; font-weight:700; border-radius:999px; padding:3px 9px; }
   .bigbtn .todo{ margin-left:auto; background:#fff; color:var(--warn); font-size:11px; border-radius:999px; padding:3px 9px; }
   .bigbtn .ok{ margin-left:auto; font-size:18px; }
   .subbtns{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -104,7 +114,7 @@
   .coinbar b{ font-size:17px; color:#b06a12; font-variant-numeric:tabular-nums; }
   /* さいふ(コイン＋スター)＋スターをあげるボタン */
   .walletrow{ display:flex; gap:8px; margin:6px 0 4px; align-items:stretch; }
-  .wchip{ flex:1; border-radius:12px; padding:7px 12px; display:flex; justify-content:space-between; align-items:center; }
+  .wchip{ flex:1; border-radius:12px; padding:7px 12px; display:flex; justify-content:space-between; align-items:center; position:relative; }
   .wchip span{ font-size:11px; font-weight:700; }
   .wchip b{ font-size:17px; font-variant-numeric:tabular-nums; }
   .wchip.coin{ background:linear-gradient(135deg,#fdf3d8,#f8e3a8); border:2px solid #ecd88a; }
@@ -297,6 +307,10 @@
     'きろく できた！':'きろく できた！','きょうも よく がんばったね':'今日も よく がんばったね',
     '🏠 ホームへ もどる':'🏠 ホームへ もどる','🛒 ショップで つかう':'🛒 ショップで つかう',
     'こんしゅう':'今週','まえの 4しゅうかん':'まえの 4週間','つきごと':'月ごと',
+    '🏫 がっこうが おわってから、よる ねるまでの こと':'🏫 学校が おわってから、夜 ねるまでの こと',
+    '🏫 がっこうが おわってからの こと':'🏫 学校が おわってからの こと',
+    'きのう、がっこうが おわってから、ゲーム・どうが・テレビ・スマホを つかった？':'きのう、学校が おわってから、ゲーム・どうが・テレビ・スマホを つかった？',
+    'きのう、がっこうが おわってから、はしったり あせを かいたりする あそびや うんどうを した？':'きのう、学校が おわってから、はしったり あせを かいたりする あそびや 運動を した？',
   };
   function T(s){ if(!G46||s==null) return s; return KJ[s]!=null?KJ[s]:s; }
 
@@ -346,6 +360,8 @@
   function jdate(d){ return (d.getMonth()+1)+'がつ'+d.getDate()+'にち('+DOWJ[d.getDay()].slice(0,-3)+')'; }
   function today(){ return new Date(); }
   function weekMonday(d){ const x=new Date(d); const wd=(x.getDay()+6)%7; x.setDate(x.getDate()-wd); return iso(x); }
+  function weekRangeLabel(mon){ const a=fromIso(mon), b=addDays(a,6);
+    return (a.getMonth()+1)+'/'+a.getDate()+'(月)〜'+(b.getMonth()+1)+'/'+b.getDate()+'(日)'; }
   function isSchool(d){
     const o=S.overrides[iso(d)];
     if(o) return o==='school';
@@ -359,6 +375,10 @@
   const WAKE_H=[5.5,6,6.5,7,7.5,8,8.5,9,9.5];
   const ST_H=[0,0.5,1,2,3];
   const QV=1;  /* question_version */
+  /* 平日の「きのう」の質問は、学校に居た時間ではなく「学校が おわってから」の
+     時間を聞いていることを、質問文と文脈チップの両方で明示する */
+  const CTX_AFTER='🏫 がっこうが おわってから、よる ねるまでの こと';
+  const CTX_AFTER2='🏫 がっこうが おわってからの こと';
 
   const ILL={
     futon:'<svg width="170" height="80" viewBox="0 0 170 80"><circle cx="140" cy="18" r="12" fill="#f5d76e"/><circle cx="146" cy="14" r="11" fill="#e9edfa"/><rect x="18" y="52" width="134" height="16" rx="8" fill="#e6dcc1"/><rect x="22" y="38" width="30" height="13" rx="6" fill="#fff"/><circle cx="38" cy="34" r="10" fill="#f6c9a0"/><path d="M31 36 q3 3 6 0 M39 36 q3 3 6 0" stroke="#9a7554" stroke-width="1.4" fill="none"/><rect x="52" y="34" width="100" height="24" rx="12" fill="#8fa3d9"/><text x="58" y="24" font-size="13">💤</text></svg>',
@@ -443,17 +463,19 @@
       {id:'M3',illust:'sunrise',ic:'morning',kind:'rail-morning',q:'きょうの あさ、なんじごろ おきた？',opts:WAKE,forget:true},
     ];
     if(extra.holWake) f.push({id:'M3H',icon:'⏰',kind:'rail-morning2',q:'きのうの あさは、なんじごろ おきた？',opts:WAKE,forget:true});
+    const CA=holiday?null:CTX_AFTER, CA2=holiday?null:CTX_AFTER2;  /* きのうが学校日なら「学校のあと」を明示 */
     f.push(
-      {id:'M4',icon:'📺',q:'きのう、ゲーム・どうが・テレビ・スマホを つかった？',opts:[['👀','つかった'],['🙅','つかわなかった']],gate:'st',openIdx:[0]},
-      {id:'M4a',icon:'🎮',kind:'amt',q:'べんきょうでは なくて、あそびや たのしみの ために つかった じかんは どれくらい？',needs:['st'],
+      {id:'M4',icon:'📺',ctx:CA,q: holiday?'きのう、ゲーム・どうが・テレビ・スマホを つかった？':'きのう、がっこうが おわってから、ゲーム・どうが・テレビ・スマホを つかった？',
+       opts:[['👀','つかった'],['🙅','つかわなかった']],gate:'st',openIdx:[0]},
+      {id:'M4a',icon:'🎮',kind:'amt',ctx:CA,q:'べんきょうでは なくて、あそびや たのしみの ために つかった じかんは どれくらい？',needs:['st'],
        opts:[['','あそびでは つかわなかった'],['','30ぷん くらい'],['','1じかん くらい'],['','2じかん くらい'],['','3じかん いじょう']],amt:[4,22,40,60,82],forget:true},
-      {id:'M5',icon:'🏃',q: holiday?'きのう、はしったり あせを かいたりする あそびや うんどうを した？':'きのう、がっこうの あと、はしったり あせを かいたりする あそびや うんどうを した？',
+      {id:'M5',icon:'🏃',ctx:CA2,q: holiday?'きのう、はしったり あせを かいたりする あそびや うんどうを した？':'きのう、がっこうが おわってから、はしったり あせを かいたりする あそびや うんどうを した？',
        opts:[['💪','した'],['🙅','しなかった']],gate:'pa',openIdx:[0]},
-      {id:'M5a',icon:'🌳',q:'どこで した？',needs:['pa'],opts:[['🌳','そと'],['🏠','たてものの なか'],['SVG:both','そとと なかの りょうほう']]},
-      {id:'M5b',icon:'⏰',kind:'amt',q:'ぜんぶで どれくらいの じかん？',needs:['pa'],
+      {id:'M5a',icon:'🌳',ctx:CA2,q:'どこで した？',needs:['pa'],opts:[['🌳','そと'],['🏠','たてものの なか'],['SVG:both','そとと なかの りょうほう']]},
+      {id:'M5b',icon:'⏰',kind:'amt',ctx:CA2,q:'ぜんぶで どれくらいの じかん？',needs:['pa'],
        opts:[['','30ぷんより みじかい'],['','30ぷん くらい'],['','1じかん くらい'],['','1じかんより ながい']],amt:[12,28,48,72],forget:true},
-      {id:'M5c',icon:'👫',q:'だれと あそんだ？',needs:['pa'],opts:[['🧍','ひとりで'],['👫','ともだちと'],['👨‍👩‍👧','かぞく・きょうだいと'],['🧑‍🏫','せんせい・おとなと']],gate:'fr',openIdx:[1]},
-      {id:'M5d',icon:'🔢',kind:'cnt',q:'いっしょに あそんだ ともだちは なんにん？<br><span style="font-size:13px;color:#8d887a">(じぶんは かぞえません)</span>',needs:['pa','fr'],
+      {id:'M5c',icon:'👫',ctx:CA2,q:'だれと あそんだ？',needs:['pa'],opts:[['🧍','ひとりで'],['👫','ともだちと'],['👨‍👩‍👧','かぞく・きょうだいと'],['🧑‍🏫','せんせい・おとなと']],gate:'fr',openIdx:[1]},
+      {id:'M5d',icon:'🔢',kind:'cnt',ctx:CA2,q:'いっしょに あそんだ ともだちは なんにん？<br><span style="font-size:13px;color:#8d887a">(じぶんは かぞえません)</span>',needs:['pa','fr'],
        opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●']},
       {id:'M6',icon:'🎒',q:'きのう、ならいごとや クラブは あった？',opts:[['⭕','あった'],['🙅','なかった']],gate:'nr',openIdx:[0]},
       {id:'M6a',icon:'⚽',q:'それは からだを うごかす ならいごと？',needs:['nr'],opts:[['⚽','はい(うんどうの ならいごと)'],['🎹','いいえ(うんどうでは ない ならいごと)'],['🔁','りょうほう あった']]}
@@ -480,20 +502,20 @@
   ];
   /* あとから きろく:えらんだ日Dについて「D-1の よる」に寝て「Dの あさ」に起きたかを聞く */
   const CATCH_FLOW=di=>{
-    const x=fromIso(di), prev=addDays(x,-1);
+    const x=fromIso(di), prev=addDays(x,-1), sch=isSchool(x);
     const dl=dt=>(dt.getMonth()+1)+'/'+dt.getDate()+'('+DOW1[dt.getDay()]+')';
     return [
       {id:'M2',illust:'futon',ic:'night',kind:'rail-night',q:dl(prev)+'の よる、なんじごろ ねた？',opts:BED,forget:true},
       {id:'M3',illust:'sunrise',ic:'morning',kind:'rail-morning',q:dl(x)+'の あさ、なんじごろ おきた？',opts:WAKE,forget:true},
-      {id:'M5',icon:'🏃',q:dl(x)+'は、はしったり あせを かいたりする あそびや うんどうを した？',opts:[['💪','した'],['🙅','しなかった']],forget:true},
+      {id:'M5',icon:'🏃',ctx:sch?CTX_AFTER2:null,q:dl(x)+(sch?'、がっこうが おわってから':'')+'、はしったり あせを かいたりする あそびや うんどうを した？',opts:[['💪','した'],['🙅','しなかった']],forget:true},
     ];
   };
 
   /* ============ 1年生用フロー(2年生以上の質問の「限定版」。時間・お金なし・イラスト中心)
      質問ID・選択肢コードは2〜3年生(g23)と そろえる(=データを比較できる) ============ */
-  const ASA_G1=[
+  const asaG1=holiday=>[
     {id:'M1',icon:'🌞',q:'きょうの からだの ちょうしは？',opts:[['😊','げんき'],['😕','ちょっと わるい'],['🤕','ケガ・びょうきで うんどう できない']]},
-    {id:'G1OUT',icon:'🌳',q:'きのう、がっこうが おわってから、そとで あそんだ？',opts:[['🌳','あそんだ'],['🏠','あそばなかった']]},
+    {id:'G1OUT',icon:'🌳',q: holiday?'きのう、そとで あそんだ？':'きのう、がっこうが おわってから、そとで あそんだ？',opts:[['🌳','あそんだ'],['🏠','あそばなかった']]},
   ];
   const KAERI_G1=[
     {id:'K1',icon:'🕙',q:'きょうの なかやすみは、そとで あそんだ？',opts:[['🌳','そとで あそんだ'],['🏫','なかに いた'],['🚫','きょうは なかった']]},
@@ -641,13 +663,18 @@
         if(fs.gates.sch===true) ev({t:'complete',s:'k',d:fs.d});
       } else ev({t:'complete',s:fs.sess,d:fs.d});
       let earned=0;
-      if(!already){
+      /* bonus=0 は「ごほうびなしの なおし」(古い日のカレンダー修正)。スター目当ての
+         あいまいな入れ直しを防ぐため、キャッチアップ期間外はコインを配らない */
+      if(!already && fs.bonus!==0){
         if(G1){ S.care[S.buddy]=(S.care[S.buddy]||0)+1; ev({t:'care',id:S.buddy}); earned='grow'; }
         else { earned=COIN_PER_REC; S.coins+=earned; ev({t:'coin',n:earned}); } }
       syncNow();   /* セッション完了ごとにサーバへ送信(設定時のみ) */
       renderDone(earned); return;
     }
     const it=items[fs.idx];
+    /* q・ctx は文字列のほか、gates(前の回答)に応じて変わる関数も受け付ける */
+    const qtxt=(typeof it.q==='function')?it.q(fs.gates):it.q;
+    const ctxt=(typeof it.ctx==='function')?it.ctx(fs.gates):it.ctx;
     const dots=items.map((_,i)=>'<i class="'+(i<fs.idx?'on':(i===fs.idx?'on now':''))+'"></i>').join('');
     const isRail=(it.kind||'').indexOf('rail')===0;
     const railCls=it.kind==='rail-night'?'night':'morning';
@@ -656,8 +683,8 @@
       '<div class="sess-head"><span class="badge '+fs.cls+'">'+fs.badge+'</span>'+
       '<span class="date">しつもん '+(fs.idx+1)+' / '+items.length+'</span></div>'+
       '<div class="dots">'+dots+'</div>'+
-      (it.ctx?'<div class="ctx">'+T(it.ctx)+'</div>':'')+visual+
-      '<div class="q-text">'+T(it.q)+'</div>'+
+      (ctxt?'<div class="ctx">'+T(ctxt)+'</div>':'')+visual+
+      '<div class="q-text">'+T(qtxt)+'</div>'+
       (isRail?'<div style="font-size:10.5px;color:#8d887a;padding:0 4px 4px 30px">↑ はやい</div>':'')+
       '<div class="opts'+(isRail?' rail '+railCls:'')+'" id="opts"></div>'+
       (isRail?'<div style="font-size:10.5px;color:#8d887a;padding:4px 4px 0 30px">↓ おそい</div>':'')+
@@ -680,6 +707,9 @@
     });
     if(it.forget){ const f=document.createElement('button'); f.className='opt forget'; f.textContent='おぼえてない';
       f.onclick=()=>{ ev({t:'ans',d:fs.d,s:it.sess||fs.sess,q:it.id,v:QV,a:'DK',lat:Date.now()-fs.shownAt});
+        /* おぼえてない時は、その先の追いかけ質問(分岐)を出さない=あいまいな記憶で答えさせない */
+        if(it.gate) fs.gates[it.gate]=false;
+        if(it.multi) it.multi.forEach(m=>{ fs.gates[m.id]=false; });
         fs.hist.push(fs.idx); fs.idx++; renderFlow(); };
       box.appendChild(f); }
     document.getElementById('back').onclick=()=>{
@@ -736,39 +766,75 @@
       '<div class="calgrid">'+head+cells+'</div>'+
       '<div class="calleg">🌞あさ ・ 🏫かえり ・ 🏅休みの日 ／ 👆日を タップして きろく・なおす</div></div>';
   }
-  /* カレンダーの日タップ → その日の きろく/なおし */
+  /* カレンダーの日タップ → 確認画面をはさんで その日の きろく/なおし */
   function bindCalendar(){
     app.querySelectorAll('[data-cal]').forEach(el=>{ el.style.cursor='pointer';
-      el.onclick=()=>startFlow(editDayFlow(el.dataset.cal),'c',el.dataset.cal,'その日の きろく','b-hol',1); }); }
+      el.onclick=()=>go('editday',el.dataset.cal); }); }
+  /* 過去日をなおす前の確認画面:あいまいな記憶での入れ直し(ごほうび目当て)を防ぐ。
+     ・「おもいだせる ことだけ なおす」を先に約束させる
+     ・ごほうびが出るのは キャッチアップ期間(きのう・おととい)の未入力日だけ。
+       それ以外は「なおしても ごほうびは なし」を始める前に明示して、動機を消す */
+  function renderEditConfirm(di){
+    const ti=iso(today());
+    if(di===ti){ startFlow(editDayFlow(di),'c',di,'きょうの きろく','b-hol',1); return; }
+    const x=fromIso(di);
+    const dl=(x.getMonth()+1)+'/'+x.getDate()+'('+DOW1[x.getDay()]+')';
+    const withinCatch=di>=iso(addDays(today(),-2));
+    const already=completed(di,'m')||completed(di,'k');
+    const canEarn=withinCatch&&!already;
+    const rewardName=G1?'⭐ スタンプ':'🪙 コイン';
+    app.className='app'+(G1?' g1':'');
+    app.innerHTML=
+      '<div class="sess-head"><span class="badge b-hol">その日の きろく</span></div>'+
+      '<div class="q-icon">🤔</div>'+
+      '<div class="q-text">'+dl+'の ことを<br>ちゃんと おもいだせるかな？</div>'+
+      '<div class="card" style="font-size:14px;line-height:2">'+
+      '✅ おもいだせる ことだけ 入れようね<br>'+
+      '✅ おもいだせない ときは「おぼえてない」を えらぼう<br>'+
+      (canEarn
+        ? '🎁 この日のぶんを きろくすると '+rewardName+'が もらえるよ'
+        : '🎁 この日は なおしても '+rewardName+'は <b>もらえないよ</b><br><span style="font-size:12px;color:#8d887a">(まちがいを なおす ための がめんだよ)</span>')+
+      '</div>'+
+      '<div class="opts" style="margin-top:14px">'+
+      '<button class="opt" id="ed-go"><span class="e">✏️</span><span>おもいだせる！ きろくを 入れる・なおす</span></button>'+
+      '<button class="opt forget" id="ed-no">おもいだせないから やめておく</button></div>'+
+      '<div class="backrow"><button class="backbtn" id="back">← ホームへ もどる</button></div>';
+    document.getElementById('ed-go').onclick=()=>startFlow(editDayFlow(di),'c',di,'その日の きろく','b-hol',canEarn?1:0);
+    document.getElementById('ed-no').onclick=()=>go('home');
+    document.getElementById('back').onclick=()=>go('home');
+  }
   /* 過去/今日の1日をまるごと入れ直すフロー(全学年)。「この日は 学校が あった？」から始まる */
   function editDayFlow(di){
     const x=fromIso(di), prev=addDays(x,-1);
     const dl=dt=>(dt.getMonth()+1)+'/'+dt.getDate()+'('+DOW1[dt.getDay()]+')';
     const head=[{id:'ATT2',icon:'🏫',q:dl(x)+'は 学校が あった？',opts:[['🏫','あった'],['🏠','なかった(おやすみ)']],gate:'sch',openIdx:[0]}];
+    /* なおしフローは記憶が前提なので、全問に「おぼえてない」を付ける。
+       学校があった日(gates.sch)は、質問文と文脈チップで「学校のあと」を明示 */
+    const afterQ=g=>g.sch?CTX_AFTER:null, afterQ2=g=>g.sch?CTX_AFTER2:null;
     if(G1){
-      const morning=[{id:'M1',icon:'🌞',q:'その日の からだの ちょうしは？',opts:[['😊','げんき'],['😕','ちょっと わるい'],['🤕','ケガ・びょうきで うんどう できない']]},
-        {id:'G1OUT',icon:'🌳',q:dl(x)+'、そとで あそんだ？',opts:[['🌳','あそんだ'],['🏠','あそばなかった']]}];
-      const kaeri=KAERI_G1.map(q=>Object.assign({},q,{sess:'k',needs:(q.needs||[]).concat('sch')}));
+      const morning=[{id:'M1',icon:'🌞',q:'その日の からだの ちょうしは？',opts:[['😊','げんき'],['😕','ちょっと わるい'],['🤕','ケガ・びょうきで うんどう できない']],forget:true},
+        {id:'G1OUT',icon:'🌳',ctx:afterQ2,q:g=>dl(x)+(g.sch?'、がっこうが おわってから':'')+'、そとで あそんだ？',opts:[['🌳','あそんだ'],['🏠','あそばなかった']],forget:true}];
+      const kaeri=KAERI_G1.map(q=>Object.assign({},q,{sess:'k',needs:(q.needs||[]).concat('sch'),forget:true}));
       /* K1にも needs sch を付ける(K1は元々 needs なし) */
-      kaeri[0]=Object.assign({},KAERI_G1[0],{sess:'k',needs:['sch']});
+      kaeri[0]=Object.assign({},KAERI_G1[0],{sess:'k',needs:['sch'],forget:true});
       return head.concat(morning, kaeri);
     }
     const morning=[
-      {id:'M1',icon:'🌞',q:'その日の からだの ちょうしは？',opts:[['😊','げんき'],['😕','ちょっと わるい'],['🤕','ケガ・びょうきで うんどう できない']]},
+      {id:'M1',icon:'🌞',q:'その日の からだの ちょうしは？',opts:[['😊','げんき'],['😕','ちょっと わるい'],['🤕','ケガ・びょうきで うんどう できない']],forget:true},
       {id:'M2',illust:'futon',ic:'night',kind:'rail-night',q:dl(prev)+'の よる、なんじごろ ねた？',opts:BED,forget:true},
       {id:'M3',illust:'sunrise',ic:'morning',kind:'rail-morning',q:dl(x)+'の あさ、なんじごろ おきた？',opts:WAKE,forget:true},
-      {id:'M4',icon:'📺',q:dl(x)+'、ゲーム・どうが・テレビ・スマホを つかった？',opts:[['👀','つかった'],['🙅','つかわなかった']],gate:'st',openIdx:[0]},
-      {id:'M4a',icon:'🎮',kind:'amt',q:'べんきょうでは なくて、あそびの じかんは どれくらい？',needs:['st'],opts:[['','あそびでは つかわなかった'],['','30ぷん くらい'],['','1じかん くらい'],['','2じかん くらい'],['','3じかん いじょう']],amt:[4,22,40,60,82],forget:true},
-      {id:'M5',icon:'🏃',q:dl(x)+'、はしったり あせを かいたりする あそびや うんどうを した？',opts:[['💪','した'],['🙅','しなかった']],gate:'pa',openIdx:[0]},
-      {id:'M5a',icon:'🌳',q:'どこで した？',needs:['pa'],opts:[['🌳','そと'],['🏠','たてものの なか'],['SVG:both','そとと なかの りょうほう']]},
-      {id:'M5c',icon:'👫',q:'だれと あそんだ？',needs:['pa'],opts:[['🧍','ひとりで'],['👫','ともだちと'],['👨‍👩‍👧','かぞく・きょうだいと'],['🧑‍🏫','せんせい・おとなと']],gate:'fr',openIdx:[1]},
-      {id:'M5d',icon:'🔢',kind:'cnt',q:'いっしょに あそんだ ともだちは なんにん？',needs:['pa','fr'],opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●']},
+      {id:'M4',icon:'📺',ctx:afterQ,q:g=>dl(x)+(g.sch?'、がっこうが おわってから':'')+'、ゲーム・どうが・テレビ・スマホを つかった？',opts:[['👀','つかった'],['🙅','つかわなかった']],gate:'st',openIdx:[0],forget:true},
+      {id:'M4a',icon:'🎮',kind:'amt',ctx:afterQ,q:'べんきょうでは なくて、あそびの じかんは どれくらい？',needs:['st'],opts:[['','あそびでは つかわなかった'],['','30ぷん くらい'],['','1じかん くらい'],['','2じかん くらい'],['','3じかん いじょう']],amt:[4,22,40,60,82],forget:true},
+      {id:'M5',icon:'🏃',ctx:afterQ2,q:g=>dl(x)+(g.sch?'、がっこうが おわってから':'')+'、はしったり あせを かいたりする あそびや うんどうを した？',opts:[['💪','した'],['🙅','しなかった']],gate:'pa',openIdx:[0],forget:true},
+      {id:'M5a',icon:'🌳',ctx:afterQ2,q:'どこで した？',needs:['pa'],opts:[['🌳','そと'],['🏠','たてものの なか'],['SVG:both','そとと なかの りょうほう']],forget:true},
+      {id:'M5c',icon:'👫',ctx:afterQ2,q:'だれと あそんだ？',needs:['pa'],opts:[['🧍','ひとりで'],['👫','ともだちと'],['👨‍👩‍👧','かぞく・きょうだいと'],['🧑‍🏫','せんせい・おとなと']],gate:'fr',openIdx:[1],forget:true},
+      {id:'M5d',icon:'🔢',kind:'cnt',ctx:afterQ2,q:'いっしょに あそんだ ともだちは なんにん？',needs:['pa','fr'],opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●'],forget:true},
     ];
     const kaeri=[
-      {id:'K1',sess:'k',icon:'🕙',q:'なかやすみは そとで あそんだ？',needs:['sch'],opts:[['🌳','そとで あそんだ'],['🏫','なかに いた'],['🚫','なかやすみは なかった']]},
-      {id:'K2',sess:'k',icon:'🍚',q:'ひるやすみは そとで あそんだ？',needs:['sch'],opts:[['🌳','そとで あそんだ'],['🏫','なかに いた'],['🚫','きょうは なかった']],gate:'lp',openIdx:[0,1]},
-      {id:'K3',sess:'k',icon:'👫',q:'ひるやすみは、だれと いることが おおかった？',needs:['sch','lp'],opts:[['🧍','ひとり'],['👫','ともだち'],['🧑‍🏫','せんせい・おとな']],gate:'kfr',openIdx:[1]},
-      {id:'K3a',sess:'k',kind:'cnt',icon:'🔢',q:'いっしょに あそんだ ともだちは なんにん？',needs:['sch','lp','kfr'],opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●']},
+      {id:'K1',sess:'k',icon:'🕙',q:'なかやすみは そとで あそんだ？',needs:['sch'],opts:[['🌳','そとで あそんだ'],['🏫','なかに いた'],['🚫','なかやすみは なかった']],forget:true},
+      {id:'K2',sess:'k',icon:'🍚',q:'ひるやすみは そとで あそんだ？',needs:['sch'],opts:[['🌳','そとで あそんだ'],['🏫','なかに いた'],['🚫','きょうは なかった']],gate:'lp',openIdx:[0,1],forget:true},
+      {id:'K3',sess:'k',icon:'👫',q:'ひるやすみは、だれと いることが おおかった？',needs:['sch','lp'],opts:[['🧍','ひとり'],['👫','ともだち'],['🧑‍🏫','せんせい・おとな']],gate:'kfr',openIdx:[1],forget:true},
+      {id:'K3a',sess:'k',kind:'cnt',icon:'🔢',q:'いっしょに あそんだ ともだちは なんにん？',needs:['sch','lp','kfr'],opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●'],forget:true},
     ];
     return head.concat(morning, kaeri);
   }
@@ -779,18 +845,19 @@
     const t=today(), ti=iso(t), p=pending();
     const greet=t.getHours()<11?'おはよう':'こんにちは';
     let big='';
+    /* 入力済みのボタンはグレー(recdone)＋「きろくずみ」で、済んだことを一目で分かるように */
     if(p.school){
-      big='<button class="bigbtn asa" id="go-asa"><span class="e">🌞</span><span>'+T('あさの きろく')+'<small>'+T('きのうの よると きょうの あさの こと')+'</small></span>'+
-        (p.morning?'<span class="todo">まだ</span>':'<span class="ok">✅</span>')+'</button>'+
-        '<button class="bigbtn kaeri" id="go-kaeri"><span class="e">🏫</span><span>'+T('かえりの きろく')+'<small>'+T('きょうの 休みじかんの こと')+'</small></span>'+
-        (p.kaeri?'<span class="todo">まだ</span>':'<span class="ok">✅</span>')+'</button>';
+      big='<button class="bigbtn asa'+(p.morning?'':' recdone')+'" id="go-asa"><span class="e">🌞</span><span>'+T('あさの きろく')+'<small>'+T('きのうの よると きょうの あさの こと')+'</small></span>'+
+        (p.morning?'<span class="todo">まだ</span>':'<span class="okpill">✅ きろくずみ</span>')+'</button>'+
+        '<button class="bigbtn kaeri'+(p.kaeri?'':' recdone')+'" id="go-kaeri"><span class="e">🏫</span><span>'+T('かえりの きろく')+'<small>'+T('きょうの 休みじかんの こと')+'</small></span>'+
+        (p.kaeri?'<span class="todo">まだ</span>':'<span class="okpill">✅ きろくずみ</span>')+'</button>';
     }else{
-      big='<button class="bigbtn hol" id="go-asa"><span class="e">🏅</span><span>'+T('休みの日チャレンジ')+'<small>'+T('きのうの ことを きろくしよう')+'</small></span>'+
-        (p.morning?'<span class="todo">まだ</span>':'<span class="ok">✅</span>')+'</button>';
+      big='<button class="bigbtn hol'+(p.morning?'':' recdone')+'" id="go-asa"><span class="e">🏅</span><span>'+T('休みの日チャレンジ')+'<small>'+T('きのうの ことを きろくしよう')+'</small></span>'+
+        (p.morning?'<span class="todo">まだ</span>':'<span class="okpill">✅ きろくずみ</span>')+'</button>';
     }
     const catchHtml=(!G1&&p.catch.length)?('<div class="catchup">📌 '+p.catch.map(d=>{const x=fromIso(d);return (x.getMonth()+1)+'/'+x.getDate()+'('+DOW1[x.getDay()]+')';}).join('・')+' の ぶんが まだだよ。<b>3もんだけ</b>で OK!'+
       p.catch.map(d=>'<button data-c="'+d+'">'+(fromIso(d).getMonth()+1)+'/'+fromIso(d).getDate()+'のぶんを いれる</button>').join(' ')+'</div>'):'';
-    const goalBtn=(!G1&&p.goalNeeded)?'<button class="bigbtn goal" id="go-goal2"><span class="e">🎯</span><span>'+T('こんしゅうの めあてを きめよう')+'</span><span class="todo">まだ</span></button>':'';
+    const goalBtn=(!G1&&p.goalNeeded)?'<button class="bigbtn goal" id="go-goal2"><span class="e">🎯</span><span>'+T('こんしゅうの めあてを きめよう')+'<small>🗓 '+weekRangeLabel(weekMonday(t))+'</small></span><span class="todo">まだ</span></button>':'';
     const bs=buddyStage(), need=nextStarNeed(S.buddy), have=S.care[S.buddy]||0, isMax=need===0;
     /* 1年生:お金・ショップなし。バディは 記録すると そだつ。タップで大きく見える */
     const buddyBox= G1
@@ -827,8 +894,9 @@
     document.getElementById('gear').onclick=()=>go('data');
     document.getElementById('go-asa').onclick=()=>{
       const y=addDays(t,-1);
-      if(G1){ startFlow(ASA_G1,'m',ti,p.school?'あさ':'休みの日',p.school?'':'b-hol',1); }
-      else startFlow(asaFlow(DOWJ[y.getDay()],!isSchool(t),{att:p.att,holWake:p.holWake}),'m',ti,
+      /* 「きのう」の質問の言い回しは、きょうではなく「きのう」が学校日だったかで決める */
+      if(G1){ startFlow(asaG1(!isSchool(y)),'m',ti,p.school?'あさ':'休みの日',p.school?'':'b-hol',1); }
+      else startFlow(asaFlow(DOWJ[y.getDay()],!isSchool(y),{att:p.att,holWake:p.holWake}),'m',ti,
         p.school?'あさ':'休みの日チャレンジ',p.school?'':'b-hol',p.school?1:2); };
     const k=document.getElementById('go-kaeri');
     if(k) k.onclick=()=>startFlow(G1?KAERI_G1:KAERI_FLOW,'k',ti,'かえり','b-kaeri',1);
@@ -869,8 +937,9 @@
       '<div id="shprog" style="font-size:12px;color:#6b675c;margin:4px 0"></div>'+
       '<button class="feedbtn" id="give">⭐ スターを あげる</button>'+
       '<div class="a-note">もっている スターを あげると なかまが レベルアップ！</div></div>'+
-      '<div class="a-sec" style="text-align:center"><h4>🪙 コインで スターを かう</h4>'+
-      '<button class="a-cta" id="buystar">⭐ スターを 1こ かう('+STAR_COST+'コイン)</button></div>'+
+      '<div class="a-sec" style="text-align:center;position:relative"><h4>🪙 コインで スターを かう</h4>'+
+      '<button class="a-cta" id="buystar">⭐ スターを 1こ かう('+STAR_COST+'コイン)</button>'+
+      '<div id="buymsg" style="min-height:20px;font-size:12.5px;font-weight:700;color:#c2410c;margin-top:4px"></div></div>'+
       '<div class="a-sec" style="text-align:center"><h4>🎁 ガチャ('+GACHA_COST+'コイン)</h4>'+
       '<div style="font-size:12px;color:#8d887a">あたらしい なかまに あえるよ。でも あたらない ことも あるよ('+S.owned.length+'/'+CHARS.length+')</div>'+
       '<button class="a-cta" id="togacha" style="margin-top:8px">🎰 ガチャを まわす</button>'+
@@ -879,7 +948,23 @@
     document.getElementById('back').onclick=()=>go('home');
     document.getElementById('togacha').onclick=()=>go('gacha');
     document.getElementById('tonakama').onclick=()=>go('nakama');
-    document.getElementById('buystar').onclick=()=>{ if(buyStar()) refreshShop(false); };
+    document.getElementById('buystar').onclick=()=>{
+      if(!buyStar()) return;
+      /* 買えたことが分かる演出:ボタンから⭐が飛び出す→スター残高チップがふくらむ＋メッセージ */
+      const by=document.getElementById('buystar');
+      by.disabled=true; by.style.opacity=.4;
+      const sec=by.parentElement;
+      const fly=document.createElement('span'); fly.className='buypop'; fly.textContent='⭐';
+      sec.appendChild(fly); burst(sec,4);
+      document.getElementById('buymsg').textContent='';
+      setTimeout(()=>{ fly.remove();
+        const chip=document.getElementById('shstar').parentElement;
+        chip.classList.remove('gotstar'); void chip.offsetWidth; chip.classList.add('gotstar');
+        burst(chip,3);
+        document.getElementById('buymsg').textContent='⭐ スターが 1こ ふえたよ！';
+        refreshShop(false);
+      },650);
+    };
     document.getElementById('give').onclick=()=>{
       const r=giveStar(); if(!r) return;
       const ch=document.getElementById('shchar');
@@ -1031,15 +1116,17 @@
     const pd0=fromIso(prevMon), pd6=addDays(pd0,6);
     const prange=(pd0.getMonth()+1)+'/'+pd0.getDate()+'〜'+(pd6.getMonth()+1)+'/'+pd6.getDate();
     let goalHtml='<div class="goalcard"><b>🎯 こんしゅうの めあて:まだ きめていないよ</b>'+
+      '<div style="font-size:11px;margin-top:2px">🗓 こんしゅう = '+weekRangeLabel(mon)+'</div>'+
       '<div style="font-size:12px;margin-top:4px">「めあて」がめんで えらんでね</div></div>';
     if(g){ const gd=GOALS.find(x=>x.code===g.code); const got=gd.judge(mon);
       g.achieved = gd.gapGoal ? gapOK(mon)===true : (got!=null&&got>=g.target); save();
       const meter=gd.gapGoal?'':Array.from({length:Math.max(g.target,got||0)},(_,i)=>'<div class="m'+(i<got?' got':'')+'">'+(i<got?'⭐':'')+'</div>').join('');
       goalHtml='<div class="goalcard"><b>🎯 こんしゅうの めあて:'+gd.label+(gd.gapGoal?'':'(週'+g.target+'日)')+'</b>'+
+        '<div style="font-size:11px;margin-top:2px">🗓 こんしゅう = '+weekRangeLabel(mon)+'</div>'+
         (meter?'<div class="meter">'+meter+'</div>':'')+
         '<div style="font-size:13px;margin-top:6px">'+(g.achieved?'たっせい 🎉':(gd.gapGoal?'こんしゅうの きろくで はんてい するよ':'いま '+(got||0)+'日/'+g.target+'日'))+'</div></div>'; }
     app.innerHTML=
-      '<h2>わたしの 1しゅうかん 📊</h2><div class="date">'+jdate(fromIso(mon))+' 〜</div>'+seg+
+      '<h2>わたしの 1しゅうかん 📊</h2><div class="date">🗓 '+weekRangeLabel(mon)+'</div>'+seg+
       '<h3>🌙 ねた じかん</h3><div class="card">'+
       (bedMode?'<div class="modeval">いちばん おおかったのは <b>'+bedMode+'</b></div>':'<div class="modeval">まだ きろくが ないよ</div>')+
       dayChart(bed,v=>(v-19)*24,hd,(21-19)*24,'めあて 9じ',[['9じ',48],['10じ',72],['11じ',96]])+
@@ -1088,6 +1175,7 @@
     const lastBed=cntWeek(lastMon,'M2',a=>a<=3), lastSoto=sotoDays(lastMon), lastMove=cntWeek(lastMon,'M5',a=>a===0);
     app.innerHTML=
       '<h2>こんしゅうの めあて 🎯</h2>'+
+      '<div class="date">🗓 こんしゅう = '+weekRangeLabel(mon)+'</div>'+
       '<div class="gsec">📊 まずは せんしゅうを ふりかえろう</div>'+
       '<div class="lastcard"><div class="lastviz">'+
       '<div class="lv"><span class="i">🌙</span>9じまでに<br>ねた日<b>'+(lastBed||0)+'日</b></div>'+
@@ -1108,7 +1196,7 @@
       b.onclick=()=>{ S.goals[mon]={code:gd.code,target:target||0,setAt:new Date().toISOString()};
         ev({t:'goal',code:gd.code,target:target||0,week:mon});
         app.innerHTML='<div class="done"><div class="big">🎯</div><h3>めあてが きまったよ！</h3>'+
-          '<p>'+gd.label+'</p><span class="stampcard">こんしゅう がんばろう！</span>'+HOMEBTN+'</div>';
+          '<p>'+gd.label+'<br>🗓 '+weekRangeLabel(mon)+'</p><span class="stampcard">こんしゅう がんばろう！</span>'+HOMEBTN+'</div>';
         bindHome(); };
       box.appendChild(b);
     });
@@ -1247,6 +1335,7 @@
     switch(scr.name){
       case 'home': renderHome(); break;
       case 'flow': renderFlow(); break;
+      case 'editday': renderEditConfirm(scr.arg); break;
       case 'week': renderWeek(); break;
       case 'goal': renderGoal(); break;
       case 'gacha': renderGacha(); break;
