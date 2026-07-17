@@ -416,6 +416,45 @@
      機種変更・OSアップデートでの消失時、あいことばを入れるだけで全履歴が戻る。
      戻り値: null=成功 / 文字列=エラーメッセージ */
   function normCode(v){ return (v||'').trim().toLowerCase().replace(/[^a-z0-9\-]/g,'').slice(0,32); }
+
+  /* ---- なまえ+ばんごう → 端末に依存しないID ----
+     子どもは「なまえ」と「じぶんの ばんごう(タブレットと同じ等)」さえ覚えて
+     いれば、どの端末でも同じIDが計算され、記録に再会できる(発行・台帳不要)。
+     サーバに送られるのはハッシュ(元に戻せない変換値)だけで、名前は送られない。
+     番号だけをIDにしないのは、同じ番号を選んだ子ども同士の記録が混ざるのを
+     防ぐため(なまえ+ばんごうが両方一致しない限り別ID)。 */
+  function normName(v){ return (v||'').normalize('NFKC').replace(/\s+/g,'').toLowerCase(); }
+  async function deriveChild(name, pw){
+    const src='kiroku1|'+normName(name)+'|'+String(pw||'').trim();
+    try{
+      if(window.crypto && crypto.subtle){
+        const h=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(src));
+        return 'k'+Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,14);
+      }
+    }catch(e){}
+    /* 保険(cryptoが使えない環境):簡易ハッシュ2種の連結 */
+    let a=5381,b=52711;
+    for(let i=0;i<src.length;i++){ const c=src.charCodeAt(i); a=((a*33)^c)>>>0; b=((b*31)+c)>>>0; }
+    return 'k'+a.toString(36)+b.toString(36);
+  }
+
+  /* ---- 引き継ぎ共通処理:IDを切り替え、サーバの記録と端末内の記録を統合 ---- */
+  async function takeover(c){
+    await syncNow();                       /* 旧IDの未送信分を先に退避 */
+    const localEvents=S.events, oldName=S.name;
+    S.server.child=c; save();
+    const err=await restoreFromServer(c, oldName);
+    if(err){ alert('サーバからの復元はありませんでした('+err+')。\nこのIDで今後の送信を行います'); save(); }
+    else{
+      /* 端末内にだけある記録をサーバ由来の記録と統合(何も失わない) */
+      const have=new Set(S.events.map(e=>e.id));
+      localEvents.forEach(e=>{ if(e.id && !have.has(e.id)){ e.sy=0; S.events.push(e); } });
+      S.events.sort((a,b)=>(a.at||'').localeCompare(b.at||''));
+      save(); syncNow();
+      alert('サーバの記録を引き継ぎました(イベント'+S.events.length+'件)');
+    }
+    go('data');
+  }
   async function restoreFromServer(code, nameOpt){
     const url=S.server.url||SYNC_DEFAULT.url, token=S.server.token||SYNC_DEFAULT.token;
     if(!url||!token) return 'サーバ同期が設定されていません';
@@ -428,7 +467,7 @@
     }catch(e){ return '通信できませんでした(オフライン?)'; }
     if(!(j&&j.ok)) return 'サーバ応答エラー:'+((j&&j.error)||'不明');
     const evs=j.events||[];
-    if(!evs.length && !j.snap) return 'この あいことばの きろくは まだ サーバに ありません';
+    if(!evs.length && !j.snap) return 'この なまえ+ばんごうの きろくは まだ サーバに ありません';
     const cur=S;
     /* 保険:サーバ側で対象日が日付型に化けてISO日時で返ってきた場合、端末の
        タイムゾーンで 'YYYY-MM-DD' に戻す(利用者は日本国内前提) */
@@ -1336,10 +1375,13 @@
       '<div style="font-size:11px;color:#8d887a">※サーバに送るのは仮名IDと回答だけ。<b>なまえは送信されません</b></div>'+
       '<button class="a-cta" id="svsave">設定を保存して いま送信</button>'+
       '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #ccc">'+
-      '<div style="font-size:12px;font-weight:700">🔑 あいことば(端末に依存しない子どものID)</div>'+
-      '<div style="margin:6px 0"><input type="text" id="chcode" autocapitalize="off" placeholder="例 usagi-042(半角英数とハイフン)"></div>'+
-      '<button class="a-cta" id="chset">あいことばを設定して サーバの記録を引き継ぐ</button>'+
-      '<div class="a-note">機種変更・故障・データ消失のとき、新しい端末でこのあいことばを入れるだけで全記録が戻ります。端末内の記録とサーバの記録は統合されます(消えません)。</div></div></div>'+
+      '<div style="font-size:12px;font-weight:700">🔑 記録の引き継ぎ(機種変更・データ消失時)</div>'+
+      '<div style="font-size:11px;color:#8d887a">この端末の仮名ID:<b>'+(S.server.child||'未発行')+'</b><br>※IDは「なまえ＋ばんごう」から自動計算されます。番号を忘れた時に備え、学校運用では名簿にこのIDを控えておくと確実です</div>'+
+      '<div style="margin:6px 0"><input type="text" id="chpw" inputmode="numeric" placeholder="子どもの ばんごう(上の「なまえ」欄と組み合わせ)"></div>'+
+      '<button class="a-cta" id="chset2">なまえ＋ばんごうで 記録を引き継ぐ</button>'+
+      '<div style="margin:6px 0"><input type="text" id="chcode" autocapitalize="off" placeholder="仮名IDを直接入力(名簿に控えがある場合)"></div>'+
+      '<button class="a-cta" id="chset">仮名IDで 記録を引き継ぐ</button>'+
+      '<div class="a-note">どちらの方法でも、サーバの記録と端末内の記録は統合されます(何も消えません)。子どもが新しい端末で最初のセットアップ時に なまえ＋ばんごう を入れた場合は、自動で引き継がれるのでこの画面は不要です。</div></div></div>'+
       '<div class="a-sec"><h4>状態</h4><div>なまえ:'+(S.name||'未設定')+' / イベント数:'+S.events.length+' / コイン:'+S.coins+' / スター:'+S.stars+' / なかま:'+S.owned.length+'</div>'+
       '<div style="margin-top:6px"><input type="text" id="nm" placeholder="なまえ(ひらがな)" value="'+(S.name||'')+'"></div>'+
       '<div style="margin-top:6px"><input type="text" id="pin2" inputmode="numeric" placeholder="おとな用パスコードを変える(現在:'+S.pin+')"></div>'+
@@ -1361,25 +1403,20 @@
       S.server.url=document.getElementById('svurl').value.trim();
       S.server.token=document.getElementById('svtoken').value.trim();
       save(); await syncNow(); go('data'); };
-    document.getElementById('chset').onclick=async()=>{
-      const c=normCode(document.getElementById('chcode').value);
-      if(!c){ alert('あいことばを入れてください(半角英数とハイフン)'); return; }
+    document.getElementById('chset2').onclick=async()=>{
+      const pw=(document.getElementById('chpw').value||'').trim();
+      const nm2=(document.getElementById('nm').value||'').trim()||S.name;
+      if(pw.length<4){ alert('ばんごう(4けた以上)を入れてください'); return; }
+      if(!nm2){ alert('「状態」欄の なまえ を入れてください'); return; }
       S.server.url=document.getElementById('svurl').value.trim()||S.server.url;
       S.server.token=document.getElementById('svtoken').value.trim()||S.server.token;
-      await syncNow();                       /* 旧IDの未送信分を先に退避 */
-      const localEvents=S.events, oldName=S.name;
-      S.server.child=c; save();
-      const err=await restoreFromServer(c, oldName);
-      if(err){ alert('サーバからの復元はありませんでした('+err+')。\nこのあいことばで今後の送信を行います'); save(); }
-      else{
-        /* 端末内にだけある記録をサーバ由来の記録と統合(何も失わない) */
-        const have=new Set(S.events.map(e=>e.id));
-        localEvents.forEach(e=>{ if(e.id && !have.has(e.id)){ e.sy=0; S.events.push(e); } });
-        S.events.sort((a,b)=>(a.at||'').localeCompare(b.at||''));
-        save(); syncNow();
-        alert('サーバの記録を引き継ぎました(イベント'+S.events.length+'件)');
-      }
-      go('data'); };
+      await takeover(await deriveChild(nm2, pw)); };
+    document.getElementById('chset').onclick=async()=>{
+      const c=normCode(document.getElementById('chcode').value);
+      if(!c){ alert('仮名IDを入れてください(半角英数)'); return; }
+      S.server.url=document.getElementById('svurl').value.trim()||S.server.url;
+      S.server.token=document.getElementById('svtoken').value.trim()||S.server.token;
+      await takeover(c); };
     document.getElementById('svnm').onclick=()=>{
       S.name=document.getElementById('nm').value.trim(); S.setup=true;
       const p2=document.getElementById('pin2').value.trim(); if(p2) S.pin=p2;
@@ -1453,20 +1490,27 @@
       '<p style="color:#8d887a;font-size:13px">'+((S.server.url||SYNC_DEFAULT.url)?'きろくは じどうで あんぜんに ほかんされます':'プロトタイプ版・データはこの端末の中だけに保存されます')+'</p>'+
       '<div style="text-align:left;margin:16px 0 8px;font-weight:700">'+(G46?'名前を おしえてね':'なまえを おしえてね')+'</div>'+
       '<input type="text" id="nm" placeholder="'+(G46?'名前(漢字も OK)':'ひらがなで にゅうりょく')+'">'+
-      '<div style="text-align:left;margin:14px 0 4px;font-weight:700">'+(G46?'🔑 あいことば(先生から もらった人)':'🔑 あいことば(せんせいから もらった人)')+'</div>'+
-      '<input type="text" id="cd" autocapitalize="off" autocomplete="off" placeholder="'+(G46?'なければ 空の まま':'なければ からの まま')+'">'+
+      '<div style="text-align:left;margin:14px 0 4px;font-weight:700">'+(G46?'🔢 じぶんの 番号':'🔢 じぶんの ばんごう')+'</div>'+
+      '<input type="text" id="cd" inputmode="numeric" autocomplete="off" placeholder="'+(G46?'タブレットと 同じで OK(すうじ4つ いじょう)':'タブレットと おなじで OK(すうじ4つ いじょう)')+'">'+
+      '<div style="font-size:11px;color:#8d887a;text-align:left">'+(G46?'なまえと この番号で、きろくが まもられるよ。わすれない 番号に してね':'なまえと この ばんごうで、きろくが まもられるよ。わすれない ばんごうに してね')+'</div>'+
       '<div id="supmsg" style="font-size:12px;color:#c2410c;min-height:18px"></div>'+
       '<button class="feedbtn" id="ok" style="margin-top:10px">'+(G46?'はじめる！':'はじめる！')+'</button></div>';
     document.getElementById('ok').onclick=async()=>{
       const v=document.getElementById('nm').value.trim();
       if(!v){ document.getElementById('nm').focus(); return; }
-      const code=normCode(document.getElementById('cd').value);
+      const pw=document.getElementById('cd').value.trim();
+      const syncOn=!!(S.server.url||SYNC_DEFAULT.url);
+      if(syncOn && pw.length<4){
+        document.getElementById('supmsg').textContent=(G46?'すうじ4つ いじょうの 番号を いれてね':'すうじ4つ いじょうの ばんごうを いれてね');
+        document.getElementById('cd').focus(); return;
+      }
       S.name=v; S.setup=true;
-      if(code){
-        S.server.child=code;   /* あいことば=端末に依存しない恒久ID */
+      if(pw.length>=4){
         document.getElementById('ok').disabled=true;
         document.getElementById('supmsg').textContent='かくにんちゅう…';
-        const err=await restoreFromServer(code, v);   /* サーバに前の記録があれば自動で引き継ぐ */
+        const key=await deriveChild(v, pw);   /* なまえ+ばんごう → 端末に依存しないID */
+        S.server.child=key;
+        const err=await restoreFromServer(key, v);   /* サーバに前の記録があれば自動で引き継ぐ */
         if(!err) restoredNote=true;   /* 復元成功:ホームで「もとに もどしたよ」表示 */
       }
       if(!S.server.child) S.server.child='c'+Math.random().toString(36).slice(2,10);  /* 端末の仮名IDを初回に発行 */
