@@ -393,11 +393,12 @@
      「共有→ホーム画面に追加」から起動するのが最も消えにくい) */
   try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
   function uid(){ return (crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2)); }
-  /* 日本時刻(端末ローカル時刻+オフセット付きISO)。研究データを日本時刻のまま読めるようにする。
-     2026-07-18より前の記録はUTC(Z付き・9時間前表示)なので分析時は注意 */
+  /* 記録時刻は日本時刻(端末ローカル時刻)の「yyyy-MM-dd HH:mm:ss」形式。
+     全データ日本時刻前提のためタイムゾーン表記は付けない(運用ルールとして
+     データ辞書に明記)。2026-07-18より前の記録はUTCのISO形式(Z付き・9時間前
+     表示)なので分析時は注意 */
   function nowIso(){ const d=new Date(), p=n=>String(n).padStart(2,'0');
-    const off=-d.getTimezoneOffset(), sg=off>=0?'+':'-', ao=Math.abs(off);
-    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+sg+p(Math.floor(ao/60))+':'+p(ao%60); }
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
   function ev(o){ o.id=uid(); o.at=nowIso(); S.events.push(o); save(); }
 
   /* ---- サーバ同期(server.url が空なら完全オフ=端末内のみ) ----
