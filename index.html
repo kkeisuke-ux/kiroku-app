@@ -393,7 +393,12 @@
      「共有→ホーム画面に追加」から起動するのが最も消えにくい) */
   try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
   function uid(){ return (crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2)); }
-  function ev(o){ o.id=uid(); o.at=new Date().toISOString(); S.events.push(o); save(); }
+  /* 日本時刻(端末ローカル時刻+オフセット付きISO)。研究データを日本時刻のまま読めるようにする。
+     2026-07-18より前の記録はUTC(Z付き・9時間前表示)なので分析時は注意 */
+  function nowIso(){ const d=new Date(), p=n=>String(n).padStart(2,'0');
+    const off=-d.getTimezoneOffset(), sg=off>=0?'+':'-', ao=Math.abs(off);
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+sg+p(Math.floor(ao/60))+':'+p(ao%60); }
+  function ev(o){ o.id=uid(); o.at=nowIso(); S.events.push(o); save(); }
 
   /* ---- サーバ同期(server.url が空なら完全オフ=端末内のみ) ----
      Content-Type は text/plain にする(CORSプリフライト不要になり、
@@ -403,7 +408,7 @@
   function snapState(){
     /* サーバに置く復元用スナップショット。なまえ・パスコードは端末外に出さない */
     return {setup:S.setup, goals:S.goals, overrides:S.overrides, owned:S.owned, buddy:S.buddy,
-      care:S.care, coins:S.coins, stars:S.stars, region:S.region, g:GRADE, at:new Date().toISOString()};
+      care:S.care, coins:S.coins, stars:S.stars, region:S.region, g:GRADE, at:nowIso()};
   }
   async function syncNow(){
     const url=S.server.url||SYNC_DEFAULT.url, token=S.server.token||SYNC_DEFAULT.token;
@@ -868,14 +873,14 @@
       if(it.kind==='cnt') extra='<span class="cnt">'+it.cnt[i]+'</span>';
       b.innerHTML=ic+extra+'<span>'+T(o[1])+'</span>';
       b.onclick=()=>{ b.classList.add('picked');
-        ev({t:'ans',d:fs.d,s:it.sess||fs.sess,q:it.id,v:QV,a:i,lat:Date.now()-fs.shownAt});
+        ev({t:'ans',d:fs.d,s:it.sess||fs.sess,q:it.id,v:QV,a:i,lat:Math.round((Date.now()-fs.shownAt)/100)/10});
         if(it.gate) fs.gates[it.gate]=it.openIdx.includes(i);
         if(it.multi) it.multi.forEach(m=>{ fs.gates[m.id]=m.openIdx.includes(i); });
         setTimeout(()=>{ fs.hist.push(fs.idx); fs.idx++; renderFlow(); },220); };
       box.appendChild(b);
     });
     if(it.forget){ const f=document.createElement('button'); f.className='opt forget'; f.textContent='おぼえてない';
-      f.onclick=()=>{ ev({t:'ans',d:fs.d,s:it.sess||fs.sess,q:it.id,v:QV,a:'DK',lat:Date.now()-fs.shownAt});
+      f.onclick=()=>{ ev({t:'ans',d:fs.d,s:it.sess||fs.sess,q:it.id,v:QV,a:'DK',lat:Math.round((Date.now()-fs.shownAt)/100)/10});
         /* おぼえてない時は、その先の追いかけ質問(分岐)を出さない=あいまいな記憶で答えさせない */
         if(it.gate) fs.gates[it.gate]=false;
         if(it.multi) it.multi.forEach(m=>{ fs.gates[m.id]=false; });
@@ -1367,7 +1372,7 @@
       const b=document.createElement('button'); b.className='goalopt';
       b.innerHTML='<span class="e">'+gd.e+'</span><span>'+gd.label+
         '<small>'+(gd.gapGoal?'ずれ 1じかん いないで たっせい':'こんしゅうは <b>週'+target+'日</b> できたら たっせい！')+'</small></span>';
-      b.onclick=()=>{ S.goals[mon]={code:gd.code,target:target||0,setAt:new Date().toISOString()};
+      b.onclick=()=>{ S.goals[mon]={code:gd.code,target:target||0,setAt:nowIso()};
         ev({t:'goal',code:gd.code,target:target||0,week:mon});
         app.innerHTML='<div class="done"><div class="big">🎯</div><h3>めあてが きまったよ！</h3>'+
           '<p>'+gd.label+'<br>🗓 '+weekRangeLabel(mon)+'</p><span class="stampcard">こんしゅう がんばろう！</span>'+HOMEBTN+'</div>';
@@ -1476,13 +1481,15 @@
       save(); go('home'); };
     const pid=S.server.child||'noid', stamp=iso(today());
     const makeCsv=()=>{
-      const head='child,target_date,session,question_id,question_version,answer,latency_ms,input_at\n';
-      return head+S.events.filter(e=>e.t==='ans').map(e=>[pid,e.d,e.s,e.q,e.v,e.a,e.lat||'',e.at].join(',')).join('\n');
+      const head='child,target_date,session,question_id,question_version,answer,latency_sec,input_at\n';
+      /* latは2026-07-18から秒(小数1桁)。それ以前のミリ秒値(>150で判別)は秒に換算して出力 */
+      const sec=v=>(v==null||v==='')?'':(v>150?Math.round(v/100)/10:v);
+      return head+S.events.filter(e=>e.t==='ans').map(e=>[pid,e.d,e.s,e.q,e.v,e.a,sec(e.lat),e.at].join(',')).join('\n');
     };
     const fname='kiroku_'+pid+'_'+stamp;
-    const markExport=()=>{ S.lastExport=new Date().toISOString(); save(); };
+    const markExport=()=>{ S.lastExport=nowIso(); save(); };
     document.getElementById('exj').onclick=()=>{ dl(fname+'.json',
-      JSON.stringify({child:pid, exported_at:new Date().toISOString(), events:S.events},null,1),'application/json'); markExport(); };
+      JSON.stringify({child:pid, exported_at:nowIso(), events:S.events},null,1),'application/json'); markExport(); };
     document.getElementById('exc').onclick=()=>{ dl(fname+'.csv','﻿'+makeCsv(),'text/csv'); markExport(); };
     document.getElementById('exs').onclick=async()=>{
       const f=new File(['﻿'+makeCsv()], fname+'.csv', {type:'text/csv'});
@@ -1512,21 +1519,21 @@
       const d=addDays(today(),-n), di=iso(d), sch=isSchool(d);
       if(Math.random()<0.12) continue;   /* たまに未入力日 */
       const bed=sch?3+r(3):4+r(4), wk=sch?2+r(3):4+r(4);
-      [['M1',r(10)<8?0:1],['M2',bed],['M3',wk],['M4',r(10)<8?0:1]].forEach(x=>ev({t:'ans',d:di,s:'m',q:x[0],v:QV,a:x[1],lat:800+r(2000)}));
-      if(ans(di,'M4')===0) ev({t:'ans',d:di,s:'m',q:'M4a',v:QV,a:1+r(3),lat:900});
-      const pa=r(10)<7?0:1; ev({t:'ans',d:di,s:'m',q:'M5',v:QV,a:pa,lat:700});
-      if(pa===0){ ev({t:'ans',d:di,s:'m',q:'M5a',v:QV,a:r(3),lat:700}); ev({t:'ans',d:di,s:'m',q:'M5b',v:QV,a:1+r(3),lat:700});
-        const c=r(4); ev({t:'ans',d:di,s:'m',q:'M5c',v:QV,a:c,lat:700}); if(c===1) ev({t:'ans',d:di,s:'m',q:'M5d',v:QV,a:r(3),lat:600}); }
-      ev({t:'ans',d:di,s:'m',q:'M6',v:QV,a:r(10)<3?0:1,lat:600});
-      ev({t:'ans',d:di,s:'m',q:'G1OUT',v:QV,a:pa,lat:600});   /* 1年生:そとで あそんだ(=運動ありと同じ) */
+      [['M1',r(10)<8?0:1],['M2',bed],['M3',wk],['M4',r(10)<8?0:1]].forEach(x=>ev({t:'ans',d:di,s:'m',q:x[0],v:QV,a:x[1],lat:Math.round((800+r(2000))/100)/10}));
+      if(ans(di,'M4')===0) ev({t:'ans',d:di,s:'m',q:'M4a',v:QV,a:1+r(3),lat:0.9});
+      const pa=r(10)<7?0:1; ev({t:'ans',d:di,s:'m',q:'M5',v:QV,a:pa,lat:0.7});
+      if(pa===0){ ev({t:'ans',d:di,s:'m',q:'M5a',v:QV,a:r(3),lat:0.7}); ev({t:'ans',d:di,s:'m',q:'M5b',v:QV,a:1+r(3),lat:0.7});
+        const c=r(4); ev({t:'ans',d:di,s:'m',q:'M5c',v:QV,a:c,lat:0.7}); if(c===1) ev({t:'ans',d:di,s:'m',q:'M5d',v:QV,a:r(3),lat:0.6}); }
+      ev({t:'ans',d:di,s:'m',q:'M6',v:QV,a:r(10)<3?0:1,lat:0.6});
+      ev({t:'ans',d:di,s:'m',q:'G1OUT',v:QV,a:pa,lat:0.6});   /* 1年生:そとで あそんだ(=運動ありと同じ) */
       ev({t:'complete',s:'m',d:di});
       if(G1){ S.care[S.buddy]=(S.care[S.buddy]||0)+1; } else { S.coins+=COIN_PER_REC; ev({t:'coin',n:COIN_PER_REC}); }
       if(sch){
-        ev({t:'ans',d:di,s:'k',q:'K1',v:QV,a:r(3),lat:700});
-        const k2=r(10)<5?0:1; ev({t:'ans',d:di,s:'k',q:'K2',v:QV,a:k2,lat:700});
-        if(k2===0) ev({t:'ans',d:di,s:'k',q:'K2a',v:QV,a:r(4),lat:700});
-        else { ev({t:'ans',d:di,s:'k',q:'K2b',v:QV,a:r(4),lat:700}); ev({t:'ans',d:di,s:'k',q:'K2c',v:QV,a:r(5),lat:700}); }
-        const w=r(3); ev({t:'ans',d:di,s:'k',q:'K3',v:QV,a:w,lat:600}); if(w===1) ev({t:'ans',d:di,s:'k',q:'K3a',v:QV,a:r(3),lat:600});
+        ev({t:'ans',d:di,s:'k',q:'K1',v:QV,a:r(3),lat:0.7});
+        const k2=r(10)<5?0:1; ev({t:'ans',d:di,s:'k',q:'K2',v:QV,a:k2,lat:0.7});
+        if(k2===0) ev({t:'ans',d:di,s:'k',q:'K2a',v:QV,a:r(4),lat:0.7});
+        else { ev({t:'ans',d:di,s:'k',q:'K2b',v:QV,a:r(4),lat:0.7}); ev({t:'ans',d:di,s:'k',q:'K2c',v:QV,a:r(5),lat:0.7}); }
+        const w=r(3); ev({t:'ans',d:di,s:'k',q:'K3',v:QV,a:w,lat:0.6}); if(w===1) ev({t:'ans',d:di,s:'k',q:'K3a',v:QV,a:r(3),lat:0.6});
         ev({t:'complete',s:'k',d:di});
         if(G1){ S.care[S.buddy]=(S.care[S.buddy]||0)+1; } else { S.coins+=COIN_PER_REC; ev({t:'coin',n:COIN_PER_REC}); }
       }
