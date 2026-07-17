@@ -1,5 +1,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="きろく">
 <title>まいにち きろく(プロトタイプ)</title>
 <style>
   :root{ --bg:#f4f3ef; --ink:#33312a; --asa:#e8940f; --kaeri:#2e8fc4; --meate:#7d6bb5;
@@ -316,7 +319,17 @@
 
   /* ============ 保存(localStorage・追記型) ============ */
   const KEY='kiroku_proto_v1_'+GRADE;   /* 学年ごとに別データ */
+
+  /* ---- 配布時に埋め込む同期設定 ----
+     ここにURLとトークンを書いて配布すると、全端末が「設定なしで」自動同期になる
+     (子どもは何もしなくても、入力のたびに記録がサーバへ複製される)。
+     ⚙️で手動設定した値がある端末では手動設定を優先。空なら従来どおり端末内のみ。 */
+  const SYNC_DEFAULT={
+    url:'https://script.google.com/macros/s/AKfycbyXXo8g_ecYM23x6u73osy5hBCts269psRUVU2PDJc6lR4IZpd-2rRMqg6cN9UANZv1bQ/exec',
+    token:'bN6!2@pf9@VV9#Pz6kv9ZqecaMquxSe*' };
+
   let S=load();
+  if(SYNC_DEFAULT.url && !S.server.url){ S.server.url=SYNC_DEFAULT.url; S.server.token=SYNC_DEFAULT.token; }
   function load(){
     try{ const d=JSON.parse(localStorage.getItem(KEY));
       if(d&&d.events){ d.server=d.server||{url:'',token:'',child:''};
@@ -330,25 +343,106 @@
       server:{url:'',token:'',child:''}, weather:{}, region:{lat:35.17,lon:136.91}, pin:'1122',
       owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0};
   }
-  function save(){ localStorage.setItem(KEY, JSON.stringify(S)); }
+  function save(){ localStorage.setItem(KEY, JSON.stringify(S)); idbSave(); }
+
+  /* ---- 二重保存(IndexedDBミラー)+起動時自動復元 ----
+     iOSアップデート後にlocalStorageが消えてデータ全損した事例(2026-07-17)への防御。
+     保存のたびに同一端末内の別領域(IndexedDB)へスナップショットを複製し、
+     起動時にlocalStorageが初期状態(セットアップ前・イベント0件)なら
+     ミラーから自動復元する。OSがサイトデータを丸ごと消す場合は両方消えるため、
+     恒久対策はサーバ同期(⚙️)または定期エクスポート。 */
+  let idb=null, restoredNote=false;
+  function idbOpen(){ return new Promise(res=>{
+    if(idb) return res(idb);
+    if(!window.indexedDB) return res(null);
+    try{
+      const rq=indexedDB.open('kiroku_backup',1);
+      rq.onupgradeneeded=()=>rq.result.createObjectStore('snap');
+      rq.onsuccess=()=>{ idb=rq.result; res(idb); };
+      rq.onerror=()=>res(null);
+    }catch(e){ res(null); }
+  });}
+  function idbSave(){ idbOpen().then(db=>{ if(!db) return;
+    try{ db.transaction('snap','readwrite').objectStore('snap').put(JSON.stringify(S), KEY); }catch(e){}
+  });}
+  function idbLoad(){ return idbOpen().then(db=>new Promise(res=>{ if(!db) return res(null);
+    try{
+      const rq=db.transaction('snap','readonly').objectStore('snap').get(KEY);
+      rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>res(null);
+    }catch(e){ res(null); }
+  }));}
+  async function restoreFromMirror(){
+    if(S.setup || S.events.length){ idbSave(); return; }   /* 正常起動:ミラーを最新化するだけ */
+    const raw=await idbLoad(); if(!raw) return;
+    try{
+      const d=JSON.parse(raw);
+      if(d && (d.setup || (d.events && d.events.length))){
+        localStorage.setItem(KEY, raw);
+        S=load(); restoredNote=true; save(); render();
+      }
+    }catch(e){}
+  }
+  /* 記憶領域の保護をブラウザに要請(対応環境のみ。iOS/iPadOSでは
+     「共有→ホーム画面に追加」から起動するのが最も消えにくい) */
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
   function uid(){ return (crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2)); }
   function ev(o){ o.id=uid(); o.at=new Date().toISOString(); S.events.push(o); save(); }
 
-  /* ---- サーバ同期(server.url が空なら完全オフ=端末内のみ) ---- */
+  /* ---- サーバ同期(server.url が空なら完全オフ=端末内のみ) ----
+     Content-Type は text/plain にする(CORSプリフライト不要になり、
+     PHP版・Google Apps Script版のどちらのサーバでも動く)。 */
   let syncMsg='';
   function unsynced(){ return S.events.filter(e=>!e.sy); }
+  function snapState(){
+    /* サーバに置く復元用スナップショット。なまえ・パスコードは端末外に出さない */
+    return {setup:S.setup, goals:S.goals, overrides:S.overrides, owned:S.owned, buddy:S.buddy,
+      care:S.care, coins:S.coins, stars:S.stars, region:S.region, g:GRADE, at:new Date().toISOString()};
+  }
   async function syncNow(){
     if(!S.server.url||!S.server.token) return;
     const q=unsynced(); if(!q.length){ syncMsg='送信ずみ'; return; }
     if(!S.server.child){ S.server.child='c'+Math.random().toString(36).slice(2,10); save(); }
     try{
       const r=await fetch(S.server.url+'?action=push',{method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({token:S.server.token, child:S.server.child, events:q})});
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({token:S.server.token, child:S.server.child, events:q, snap:snapState()})});
       const j=await r.json();
       if(j&&j.ok){ q.forEach(e=>e.sy=1); save(); syncMsg='✅ '+j.saved+'件を送信(累計'+j.total+'件)'; }
       else syncMsg='⚠️ サーバ応答エラー:'+(j&&j.error||r.status);
     }catch(err){ syncMsg='⚠️ 送信できません(オフライン?)。次回自動で再送します'; }
+  }
+
+  /* ---- サーバからの復元(あいことば=端末に依存しない恒久ID) ----
+     機種変更・OSアップデートでの消失時、あいことばを入れるだけで全履歴が戻る。
+     戻り値: null=成功 / 文字列=エラーメッセージ */
+  function normCode(v){ return (v||'').trim().toLowerCase().replace(/[^a-z0-9\-]/g,'').slice(0,32); }
+  async function restoreFromServer(code, nameOpt){
+    const url=S.server.url||SYNC_DEFAULT.url, token=S.server.token||SYNC_DEFAULT.token;
+    if(!url||!token) return 'サーバ同期が設定されていません';
+    let j=null;
+    try{
+      const r=await fetch(url+'?action=pull',{method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({token:token, child:code})});
+      j=await r.json();
+    }catch(e){ return '通信できませんでした(オフライン?)'; }
+    if(!(j&&j.ok)) return 'サーバ応答エラー:'+((j&&j.error)||'不明');
+    const evs=j.events||[];
+    if(!evs.length && !j.snap) return 'この あいことばの きろくは まだ サーバに ありません';
+    const cur=S;
+    /* 保険:サーバ側で対象日が日付型に化けてISO日時で返ってきた場合、端末の
+       タイムゾーンで 'YYYY-MM-DD' に戻す(利用者は日本国内前提) */
+    const fixD=e=>{ if(typeof e.d==='string' && e.d.length>10 && e.d.indexOf('T')>0){
+      const x=new Date(e.d); if(!isNaN(x)) e.d=iso(x); } return e; };
+    S={name:(nameOpt!=null?nameOpt:(cur.name||'')), setup:true,
+      events:evs.map(e=>{ e.sy=1; return fixD(e); }),
+      goals:{}, overrides:{}, server:{url:url, token:token, child:code},
+      weather:cur.weather||{}, region:cur.region||{lat:35.17,lon:136.91}, pin:cur.pin||'1122',
+      owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0};
+    const sp=j.snap;
+    if(sp){ ['goals','overrides','owned','buddy','care','coins','stars','region'].forEach(k=>{
+      if(sp[k]!=null) S[k]=sp[k]; }); }
+    save(); return null;
   }
 
   /* ============ 日付ヘルパ ============ */
@@ -886,6 +980,7 @@
       '<span class="gradebadge">'+GRADES[GRADE]+'</span>'+
       '<div class="date">'+jdate(t)+(p.school?'':' ・がっこうは おやすみ')+'</div>'+
       '<div class="home-greet">'+greet+'、'+(S.name||'')+'さん！</div>'+
+      (restoredNote?'<div class="catchup">💾 きえていた きろくを バックアップから もとに もどしたよ！</div>':'')+
       coinbar+
       '<div class="bigbtns">'+big+goalBtn+'</div>'+catchHtml+
       subbtns+
@@ -1225,13 +1320,26 @@
     if(!adultOK){ renderPin(); return; }
     if(!S.server.child){ S.server.child='c'+Math.random().toString(36).slice(2,10); save(); }  /* 既存利用者にも仮名IDを補完 */
     const rows=S.events.slice(-30).reverse().map(e=>'<tr><td>'+(e.at||'').slice(5,16).replace('T',' ')+'</td><td>'+e.t+'</td><td>'+(e.d||'')+'</td><td>'+(e.q||e.to||e.code||'')+'</td><td>'+(e.a!==undefined?e.a:(e.n||''))+'</td><td>'+(e.sy?'済':'未')+'</td></tr>').join('');
+    const protWarn=!S.server.url && S.events.length>0;
     app.innerHTML='<div class="adult"><h2>⚙️ データ管理(大人向け)</h2>'+
+      '<div class="a-sec"'+(protWarn?' style="border:2px solid #c2410c"':'')+'><h4>🛡 データ保護の状態</h4>'+
+      '<div style="font-size:12px;line-height:1.8">'+
+      'サーバ同期:'+(S.server.url?'<b style="color:#2c7a2c">設定済み</b>':'<b style="color:#c2410c">未設定(この端末の中にしかデータがありません)</b>')+
+      ' / 最終エクスポート:'+(S.lastExport?S.lastExport.slice(0,10):'<b style="color:#c2410c">まだ一度もなし</b>')+
+      '<br>※端末内のデータは<b>OSのアップデートやブラウザの記憶領域整理で消えることがあります</b>(2026年7月にiPhoneで発生)。'+
+      'サーバ同期を設定するか、週1回以上のCSV/JSONエクスポートを必ず行ってください。'+
+      'iPhone/iPadでは Safari の「共有 → ホーム画面に追加」から起動すると消えにくくなります。</div></div>'+
       '<div class="a-sec"><h4>🌐 サーバ同期(設定しなければ端末内のみ)</h4>'+
       '<div style="margin-bottom:6px"><input type="text" id="svurl" placeholder="api.phpのURL(例 https://xxx.sakura.ne.jp/kiroku/api.php)" value="'+(S.server.url||'')+'"></div>'+
       '<div style="margin-bottom:6px"><input type="text" id="svtoken" placeholder="トークン(config.phpで決めた文字列)" value="'+(S.server.token||'')+'"></div>'+
       '<div style="font-size:11px;color:#8d887a">仮名ID:'+(S.server.child||'(初回送信時に自動生成)')+' / 未送信:'+unsynced().length+'件'+(syncMsg?(' / '+syncMsg):'')+'</div>'+
       '<div style="font-size:11px;color:#8d887a">※サーバに送るのは仮名IDと回答だけ。<b>なまえは送信されません</b></div>'+
-      '<button class="a-cta" id="svsave">設定を保存して いま送信</button></div>'+
+      '<button class="a-cta" id="svsave">設定を保存して いま送信</button>'+
+      '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #ccc">'+
+      '<div style="font-size:12px;font-weight:700">🔑 あいことば(端末に依存しない子どものID)</div>'+
+      '<div style="margin:6px 0"><input type="text" id="chcode" autocapitalize="off" placeholder="例 usagi-042(半角英数とハイフン)"></div>'+
+      '<button class="a-cta" id="chset">あいことばを設定して サーバの記録を引き継ぐ</button>'+
+      '<div class="a-note">機種変更・故障・データ消失のとき、新しい端末でこのあいことばを入れるだけで全記録が戻ります。端末内の記録とサーバの記録は統合されます(消えません)。</div></div></div>'+
       '<div class="a-sec"><h4>状態</h4><div>なまえ:'+(S.name||'未設定')+' / イベント数:'+S.events.length+' / コイン:'+S.coins+' / スター:'+S.stars+' / なかま:'+S.owned.length+'</div>'+
       '<div style="margin-top:6px"><input type="text" id="nm" placeholder="なまえ(ひらがな)" value="'+(S.name||'')+'"></div>'+
       '<div style="margin-top:6px"><input type="text" id="pin2" inputmode="numeric" placeholder="おとな用パスコードを変える(現在:'+S.pin+')"></div>'+
@@ -1253,6 +1361,25 @@
       S.server.url=document.getElementById('svurl').value.trim();
       S.server.token=document.getElementById('svtoken').value.trim();
       save(); await syncNow(); go('data'); };
+    document.getElementById('chset').onclick=async()=>{
+      const c=normCode(document.getElementById('chcode').value);
+      if(!c){ alert('あいことばを入れてください(半角英数とハイフン)'); return; }
+      S.server.url=document.getElementById('svurl').value.trim()||S.server.url;
+      S.server.token=document.getElementById('svtoken').value.trim()||S.server.token;
+      await syncNow();                       /* 旧IDの未送信分を先に退避 */
+      const localEvents=S.events, oldName=S.name;
+      S.server.child=c; save();
+      const err=await restoreFromServer(c, oldName);
+      if(err){ alert('サーバからの復元はありませんでした('+err+')。\nこのあいことばで今後の送信を行います'); save(); }
+      else{
+        /* 端末内にだけある記録をサーバ由来の記録と統合(何も失わない) */
+        const have=new Set(S.events.map(e=>e.id));
+        localEvents.forEach(e=>{ if(e.id && !have.has(e.id)){ e.sy=0; S.events.push(e); } });
+        S.events.sort((a,b)=>(a.at||'').localeCompare(b.at||''));
+        save(); syncNow();
+        alert('サーバの記録を引き継ぎました(イベント'+S.events.length+'件)');
+      }
+      go('data'); };
     document.getElementById('svnm').onclick=()=>{
       S.name=document.getElementById('nm').value.trim(); S.setup=true;
       const p2=document.getElementById('pin2').value.trim(); if(p2) S.pin=p2;
@@ -1263,20 +1390,26 @@
       return head+S.events.filter(e=>e.t==='ans').map(e=>[pid,e.d,e.s,e.q,e.v,e.a,e.lat||'',e.at].join(',')).join('\n');
     };
     const fname='kiroku_'+pid+'_'+stamp;
-    document.getElementById('exj').onclick=()=>dl(fname+'.json',
-      JSON.stringify({child:pid, exported_at:new Date().toISOString(), events:S.events},null,1),'application/json');
-    document.getElementById('exc').onclick=()=>dl(fname+'.csv','﻿'+makeCsv(),'text/csv');
+    const markExport=()=>{ S.lastExport=new Date().toISOString(); save(); };
+    document.getElementById('exj').onclick=()=>{ dl(fname+'.json',
+      JSON.stringify({child:pid, exported_at:new Date().toISOString(), events:S.events},null,1),'application/json'); markExport(); };
+    document.getElementById('exc').onclick=()=>{ dl(fname+'.csv','﻿'+makeCsv(),'text/csv'); markExport(); };
     document.getElementById('exs').onclick=async()=>{
       const f=new File(['﻿'+makeCsv()], fname+'.csv', {type:'text/csv'});
       if(navigator.canShare && navigator.canShare({files:[f]})){
-        try{ await navigator.share({files:[f], title:fname}); }catch(e){/* キャンセル */}
+        try{ await navigator.share({files:[f], title:fname}); markExport(); }catch(e){/* キャンセル */}
       } else alert('この端末は共有ボタンに対応していません。「ダウンロード」か「コピー」を使ってください');
     };
     document.getElementById('excp').onclick=async()=>{
-      try{ await navigator.clipboard.writeText(makeCsv()); alert('コピーしました。回収用フォームやメモに貼り付けてください'); }
+      try{ await navigator.clipboard.writeText(makeCsv()); markExport(); alert('コピーしました。回収用フォームやメモに貼り付けてください'); }
       catch(e){ alert('コピーできませんでした。「ダウンロード」を使ってください'); } };
     document.getElementById('demo').onclick=()=>{ genDemo(); alert('デモデータを生成しました'); go('home'); };
-    document.getElementById('wipe').onclick=()=>{ if(confirm('本当に全データを削除しますか？(元に戻せません)')){ S={name:S.name,setup:true,events:[],stars:0,goals:{},overrides:{}}; save(); go('home'); } };
+    document.getElementById('wipe').onclick=()=>{ if(confirm('本当に全データを削除しますか？(元に戻せません)')){
+      S={name:S.name, setup:true, events:[], goals:{}, overrides:{},
+        server:{url:'',token:'',child:''}, weather:{}, region:S.region, pin:S.pin,
+        owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0};
+      save();   /* save()がIndexedDBミラーも削除後の状態で上書きする(復元で戻らないように) */
+      go('home'); } };
   }
   function dl(name,content,type){
     const a=document.createElement('a');
@@ -1317,14 +1450,25 @@
     app.innerHTML='<div style="margin:auto 0;text-align:center">'+
       '<div style="font-size:52px">🌱</div><h2>まいにち きろく</h2>'+
       '<div class="gradebadge" style="position:static;display:inline-block;margin:4px 0">'+GRADES[GRADE]+'よう</div>'+
-      '<p style="color:#8d887a;font-size:13px">プロトタイプ版・データはこの端末の中だけに保存されます</p>'+
+      '<p style="color:#8d887a;font-size:13px">'+((S.server.url||SYNC_DEFAULT.url)?'きろくは じどうで あんぜんに ほかんされます':'プロトタイプ版・データはこの端末の中だけに保存されます')+'</p>'+
       '<div style="text-align:left;margin:16px 0 8px;font-weight:700">'+(G46?'名前を おしえてね':'なまえを おしえてね')+'</div>'+
       '<input type="text" id="nm" placeholder="'+(G46?'名前(漢字も OK)':'ひらがなで にゅうりょく')+'">'+
-      '<button class="feedbtn" id="ok" style="margin-top:16px">'+(G46?'はじめる！':'はじめる！')+'</button></div>';
-    document.getElementById('ok').onclick=()=>{
+      '<div style="text-align:left;margin:14px 0 4px;font-weight:700">'+(G46?'🔑 あいことば(先生から もらった人)':'🔑 あいことば(せんせいから もらった人)')+'</div>'+
+      '<input type="text" id="cd" autocapitalize="off" autocomplete="off" placeholder="'+(G46?'なければ 空の まま':'なければ からの まま')+'">'+
+      '<div id="supmsg" style="font-size:12px;color:#c2410c;min-height:18px"></div>'+
+      '<button class="feedbtn" id="ok" style="margin-top:10px">'+(G46?'はじめる！':'はじめる！')+'</button></div>';
+    document.getElementById('ok').onclick=async()=>{
       const v=document.getElementById('nm').value.trim();
       if(!v){ document.getElementById('nm').focus(); return; }
+      const code=normCode(document.getElementById('cd').value);
       S.name=v; S.setup=true;
+      if(code){
+        S.server.child=code;   /* あいことば=端末に依存しない恒久ID */
+        document.getElementById('ok').disabled=true;
+        document.getElementById('supmsg').textContent='かくにんちゅう…';
+        const err=await restoreFromServer(code, v);   /* サーバに前の記録があれば自動で引き継ぐ */
+        if(!err) restoredNote=true;   /* 復元成功:ホームで「もとに もどしたよ」表示 */
+      }
       if(!S.server.child) S.server.child='c'+Math.random().toString(36).slice(2,10);  /* 端末の仮名IDを初回に発行 */
       save(); go('home'); };
   }
@@ -1348,5 +1492,9 @@
   /* 回収モード:URLの最後に #kaishu を付けて開くと⚙️(エクスポート)画面へ直行 */
   if(/kaishu|data/.test(location.hash)) scr={name:'data'};   /* #kaishu / #g23?kaishu 等で回収画面へ */
   render();
+  restoreFromMirror();   /* localStorage消失時はミラーから自動復元して再描画 */
+  /* 電波が戻った時・アプリに戻ってきた時に未送信分を自動再送 */
+  window.addEventListener('online', ()=>{ syncNow(); });
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncNow(); });
 })();
 </script>
