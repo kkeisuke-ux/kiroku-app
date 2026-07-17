@@ -329,7 +329,10 @@
     token:'bN6!2@pf9@VV9#Pz6kv9ZqecaMquxSe*' };
 
   let S=load();
-  if(SYNC_DEFAULT.url && !S.server.url){ S.server.url=SYNC_DEFAULT.url; S.server.token=SYNC_DEFAULT.token; }
+  /* 既定サーバ設定は端末に保存しない(毎回SYNC_DEFAULTを参照)。こうすると
+     サーバURLが変わってもアプリ更新だけで全端末が追従する。過去バージョンが
+     保存してしまった既定値はここで消して動的参照に戻す(手動設定は残す)。 */
+  if(S.server.url===SYNC_DEFAULT.url){ S.server.url=''; S.server.token=''; }
   function load(){
     try{ const d=JSON.parse(localStorage.getItem(KEY));
       if(d&&d.events){ d.server=d.server||{url:'',token:'',child:''};
@@ -351,7 +354,11 @@
      起動時にlocalStorageが初期状態(セットアップ前・イベント0件)なら
      ミラーから自動復元する。OSがサイトデータを丸ごと消す場合は両方消えるため、
      恒久対策はサーバ同期(⚙️)または定期エクスポート。 */
-  let idb=null, restoredNote=false;
+  let idb=null, restoredNote=false, pwSetNote=false;
+  /* ばんごう未設定の既存端末(ランダム仮ID='c'始まり)にだけバナーを出す */
+  function needPwBanner(){
+    return !!(S.server.url||SYNC_DEFAULT.url) && S.setup && /^c/.test(S.server.child||'');
+  }
   function idbOpen(){ return new Promise(res=>{
     if(idb) return res(idb);
     if(!window.indexedDB) return res(null);
@@ -399,13 +406,14 @@
       care:S.care, coins:S.coins, stars:S.stars, region:S.region, g:GRADE, at:new Date().toISOString()};
   }
   async function syncNow(){
-    if(!S.server.url||!S.server.token) return;
+    const url=S.server.url||SYNC_DEFAULT.url, token=S.server.token||SYNC_DEFAULT.token;
+    if(!url||!token) return;
     const q=unsynced(); if(!q.length){ syncMsg='送信ずみ'; return; }
     if(!S.server.child){ S.server.child='c'+Math.random().toString(36).slice(2,10); save(); }
     try{
-      const r=await fetch(S.server.url+'?action=push',{method:'POST',
+      const r=await fetch(url+'?action=push',{method:'POST',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body:JSON.stringify({token:S.server.token, child:S.server.child, events:q, snap:snapState()})});
+        body:JSON.stringify({token:token, child:S.server.child, events:q, snap:snapState()})});
       const j=await r.json();
       if(j&&j.ok){ q.forEach(e=>e.sy=1); save(); syncMsg='✅ '+j.saved+'件を送信(累計'+j.total+'件)'; }
       else syncMsg='⚠️ サーバ応答エラー:'+(j&&j.error||r.status);
@@ -436,6 +444,34 @@
     let a=5381,b=52711;
     for(let i=0;i<src.length;i++){ const c=src.charCodeAt(i); a=((a*33)^c)>>>0; b=((b*31)+c)>>>0; }
     return 'k'+a.toString(36)+b.toString(36);
+  }
+
+  /* ---- ばんごうの設定・変更(再設定) ----
+     この端末の記録をサーバ上で新しいID(なまえ+新しい番号)へ付け替える。
+     古い番号は不要なので「忘れた時の再設定」もこれだけで済む。
+     他の子が使っている なまえ+ばんごう と衝突する場合は中止する。 */
+  async function changeNumber(name, pw){
+    const newID=await deriveChild(name, pw);
+    if(newID===S.server.child){ if(name) S.name=name; save(); return null; }  /* 同じ組合せ:何もしない */
+    const url=S.server.url||SYNC_DEFAULT.url, token=S.server.token||SYNC_DEFAULT.token;
+    if(url&&token){
+      try{
+        /* 衝突チェック:その なまえ+ばんごう が既に別の記録を持っていないか */
+        const r=await fetch(url+'?action=pull',{method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({token:token, child:newID})});
+        const j=await r.json();
+        if(j&&j.ok&&((j.events&&j.events.length)||j.snap))
+          return 'その なまえと ばんごうは もう つかわれているみたい。ちがう ばんごうに してね';
+        /* サーバ上の記録を古いIDから新しいIDへ付け替え */
+        const rb=await fetch(url+'?action=rebind',{method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({token:token, from:S.server.child, to:newID})});
+        const jb=await rb.json();
+        if(!(jb&&jb.ok)) return 'サーバに つながらなかったよ。でんぱの いい ところで もういちど ためしてね';
+      }catch(e){ return 'サーバに つながらなかったよ。でんぱの いい ところで もういちど ためしてね'; }
+    }
+    S.server.child=newID; if(name) S.name=name; save(); syncNow(); return null;
   }
 
   /* ---- 引き継ぎ共通処理:IDを切り替え、サーバの記録と端末内の記録を統合 ---- */
@@ -1020,12 +1056,16 @@
       '<div class="date">'+jdate(t)+(p.school?'':' ・がっこうは おやすみ')+'</div>'+
       '<div class="home-greet">'+greet+'、'+(S.name||'')+'さん！</div>'+
       (restoredNote?'<div class="catchup">💾 きえていた きろくを バックアップから もとに もどしたよ！</div>':'')+
+      (pwSetNote?'<div class="catchup">🔑 '+T('ばんごうを おぼえたよ！これで きろくは あんしんだよ')+'</div>':'')+
+      (needPwBanner()?'<button class="catchup" id="go-pwset" style="width:100%;text-align:left;border:none;cursor:pointer">🔑 '+T('じぶんの ばんごうを きめてね(タップして せってい)')+'</button>':'')+
       coinbar+
       '<div class="bigbtns">'+big+goalBtn+'</div>'+catchHtml+
       subbtns+
       buddyBox+monthCalendar()+
       '<button class="modelink" id="mode">'+(p.school?'🏖️ きょうは がっこうが ない日？ → やすみの日モードへ':'🏫 きょうは がっこうが ある日？ → がっこうの日モードへ')+'</button>';
     document.getElementById('gear').onclick=()=>go('data');
+    const pwb=document.getElementById('go-pwset'); if(pwb) pwb.onclick=()=>go('pwset');
+    pwSetNote=false;   /* 完了メッセージは1回だけ表示 */
     document.getElementById('go-asa').onclick=()=>{
       const y=addDays(t,-1);
       /* 「きのう」の質問の言い回しは、きょうではなく「きのう」が学校日だったかで決める */
@@ -1359,17 +1399,18 @@
     if(!adultOK){ renderPin(); return; }
     if(!S.server.child){ S.server.child='c'+Math.random().toString(36).slice(2,10); save(); }  /* 既存利用者にも仮名IDを補完 */
     const rows=S.events.slice(-30).reverse().map(e=>'<tr><td>'+(e.at||'').slice(5,16).replace('T',' ')+'</td><td>'+e.t+'</td><td>'+(e.d||'')+'</td><td>'+(e.q||e.to||e.code||'')+'</td><td>'+(e.a!==undefined?e.a:(e.n||''))+'</td><td>'+(e.sy?'済':'未')+'</td></tr>').join('');
-    const protWarn=!S.server.url && S.events.length>0;
+    const effUrl=S.server.url||SYNC_DEFAULT.url;
+    const protWarn=!effUrl && S.events.length>0;
     app.innerHTML='<div class="adult"><h2>⚙️ データ管理(大人向け)</h2>'+
       '<div class="a-sec"'+(protWarn?' style="border:2px solid #c2410c"':'')+'><h4>🛡 データ保護の状態</h4>'+
       '<div style="font-size:12px;line-height:1.8">'+
-      'サーバ同期:'+(S.server.url?'<b style="color:#2c7a2c">設定済み</b>':'<b style="color:#c2410c">未設定(この端末の中にしかデータがありません)</b>')+
+      'サーバ同期:'+(effUrl?'<b style="color:#2c7a2c">有効'+(S.server.url?'(手動設定)':'(アプリ内蔵の既定サーバ)')+'</b>':'<b style="color:#c2410c">未設定(この端末の中にしかデータがありません)</b>')+
       ' / 最終エクスポート:'+(S.lastExport?S.lastExport.slice(0,10):'<b style="color:#c2410c">まだ一度もなし</b>')+
       '<br>※端末内のデータは<b>OSのアップデートやブラウザの記憶領域整理で消えることがあります</b>(2026年7月にiPhoneで発生)。'+
       'サーバ同期を設定するか、週1回以上のCSV/JSONエクスポートを必ず行ってください。'+
       'iPhone/iPadでは Safari の「共有 → ホーム画面に追加」から起動すると消えにくくなります。</div></div>'+
       '<div class="a-sec"><h4>🌐 サーバ同期(設定しなければ端末内のみ)</h4>'+
-      '<div style="margin-bottom:6px"><input type="text" id="svurl" placeholder="api.phpのURL(例 https://xxx.sakura.ne.jp/kiroku/api.php)" value="'+(S.server.url||'')+'"></div>'+
+      '<div style="margin-bottom:6px"><input type="text" id="svurl" placeholder="未入力=アプリ内蔵の既定サーバを使用(通常はこのまま)" value="'+(S.server.url||'')+'"></div>'+
       '<div style="margin-bottom:6px"><input type="text" id="svtoken" placeholder="トークン(config.phpで決めた文字列)" value="'+(S.server.token||'')+'"></div>'+
       '<div style="font-size:11px;color:#8d887a">仮名ID:'+(S.server.child||'(初回送信時に自動生成)')+' / 未送信:'+unsynced().length+'件'+(syncMsg?(' / '+syncMsg):'')+'</div>'+
       '<div style="font-size:11px;color:#8d887a">※サーバに送るのは仮名IDと回答だけ。<b>なまえは送信されません</b></div>'+
@@ -1377,8 +1418,10 @@
       '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #ccc">'+
       '<div style="font-size:12px;font-weight:700">🔑 記録の引き継ぎ(機種変更・データ消失時)</div>'+
       '<div style="font-size:11px;color:#8d887a">この端末の仮名ID:<b>'+(S.server.child||'未発行')+'</b><br>※IDは「なまえ＋ばんごう」から自動計算されます。番号を忘れた時に備え、学校運用では名簿にこのIDを控えておくと確実です</div>'+
-      '<div style="margin:6px 0"><input type="text" id="chpw" inputmode="numeric" placeholder="子どもの ばんごう(上の「なまえ」欄と組み合わせ)"></div>'+
-      '<button class="a-cta" id="chset2">なまえ＋ばんごうで 記録を引き継ぐ</button>'+
+      '<div style="margin:6px 0"><input type="text" id="chnew" inputmode="numeric" placeholder="新しい ばんごう(4けた以上)"></div>'+
+      '<button class="a-cta" id="chnum">ばんごうを設定・変更する(忘れた時の再設定もこれ。古い番号は不要)</button>'+
+      '<div style="margin:10px 0 6px"><input type="text" id="chpw" inputmode="numeric" placeholder="子どもの ばんごう(上の「なまえ」欄と組み合わせ)"></div>'+
+      '<button class="a-cta" id="chset2">なまえ＋ばんごうで 記録を引き継ぐ(別端末の記録をこの端末へ)</button>'+
       '<div style="margin:6px 0"><input type="text" id="chcode" autocapitalize="off" placeholder="仮名IDを直接入力(名簿に控えがある場合)"></div>'+
       '<button class="a-cta" id="chset">仮名IDで 記録を引き継ぐ</button>'+
       '<div class="a-note">どちらの方法でも、サーバの記録と端末内の記録は統合されます(何も消えません)。子どもが新しい端末で最初のセットアップ時に なまえ＋ばんごう を入れた場合は、自動で引き継がれるのでこの画面は不要です。</div></div></div>'+
@@ -1403,6 +1446,16 @@
       S.server.url=document.getElementById('svurl').value.trim();
       S.server.token=document.getElementById('svtoken').value.trim();
       save(); await syncNow(); go('data'); };
+    document.getElementById('chnum').onclick=async()=>{
+      const pw=(document.getElementById('chnew').value||'').trim();
+      const nm2=(document.getElementById('nm').value||'').trim()||S.name;
+      if(pw.length<4){ alert('新しい ばんごう(4けた以上)を入れてください'); return; }
+      if(!nm2){ alert('「状態」欄の なまえ を入れてください'); return; }
+      S.server.url=document.getElementById('svurl').value.trim()||S.server.url;
+      S.server.token=document.getElementById('svtoken').value.trim()||S.server.token;
+      const err=await changeNumber(nm2, pw);
+      alert(err?err:'設定しました。サーバの記録もこの なまえ+ばんごう に付け替えました');
+      go('data'); };
     document.getElementById('chset2').onclick=async()=>{
       const pw=(document.getElementById('chpw').value||'').trim();
       const nm2=(document.getElementById('nm').value||'').trim()||S.name;
@@ -1482,6 +1535,33 @@
     save();
   }
 
+  /* ============ ばんごうの設定(既存利用者向け・子どもが自分で操作) ============
+     セットアップを番号なしで済ませた既存端末用。ホームのバナーから開く。
+     番号を忘れた時の再設定も同じ画面(古い番号の入力は不要)。 */
+  function renderPwset(){
+    app.innerHTML='<div style="margin:auto 0;text-align:center">'+
+      '<div style="font-size:44px">🔑</div><h2>'+(G46?'じぶんの 番号を きめよう':'じぶんの ばんごうを きめよう')+'</h2>'+
+      '<p style="color:#8d887a;font-size:13px">'+(G46?'なまえと 番号で きろくが まもられるよ。タブレットと 同じ 番号で OK':'なまえと ばんごうで きろくが まもられるよ。タブレットと おなじ ばんごうで OK')+'</p>'+
+      '<div style="text-align:left;margin:10px 0 4px;font-weight:700">なまえ</div>'+
+      '<input type="text" id="pnm" value="'+(S.name||'').replace(/"/g,'&quot;')+'">'+
+      '<div style="text-align:left;margin:10px 0 4px;font-weight:700">'+(G46?'じぶんの 番号(すうじ4つ いじょう)':'じぶんの ばんごう(すうじ4つ いじょう)')+'</div>'+
+      '<input type="text" id="ppw" inputmode="numeric" autocomplete="off">'+
+      '<div id="pmsg2" style="font-size:12px;color:#c2410c;min-height:18px"></div>'+
+      '<button class="feedbtn" id="pok" style="margin-top:8px">きめた！</button>'+
+      '<div class="backrow"><button class="backbtn" id="back">← ホームへ もどる</button></div></div>';
+    document.getElementById('back').onclick=()=>go('home');
+    document.getElementById('pok').onclick=async()=>{
+      const nm2=document.getElementById('pnm').value.trim();
+      const pw=document.getElementById('ppw').value.trim();
+      if(!nm2){ document.getElementById('pnm').focus(); return; }
+      if(pw.length<4){ document.getElementById('pmsg2').textContent='すうじ4つ いじょうの ばんごうを いれてね'; document.getElementById('ppw').focus(); return; }
+      document.getElementById('pok').disabled=true;
+      document.getElementById('pmsg2').textContent='かくにんちゅう…';
+      const err=await changeNumber(nm2, pw);
+      if(err){ document.getElementById('pok').disabled=false; document.getElementById('pmsg2').textContent=err; return; }
+      pwSetNote=true; go('home'); };
+  }
+
   /* ============ 初回セットアップ ============ */
   function renderSetup(){
     app.innerHTML='<div style="margin:auto 0;text-align:center">'+
@@ -1522,6 +1602,7 @@
     if(!S.setup){ renderSetup(); return; }
     switch(scr.name){
       case 'home': renderHome(); break;
+      case 'pwset': renderPwset(); break;
       case 'flow': renderFlow(); break;
       case 'editday': renderEditConfirm(scr.arg); break;
       case 'week': renderWeek(); break;
