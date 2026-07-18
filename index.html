@@ -265,6 +265,17 @@
   .trend .tb em{ position:absolute; top:-15px; left:50%; transform:translateX(-50%); font-style:normal; font-size:9px; color:#6b675c; white-space:nowrap; }
   .trend .tb span{ position:absolute; bottom:-16px; left:50%; transform:translateX(-50%); font-size:9px; color:#8d887a; white-space:nowrap; }
   .tnote{ height:14px; }
+  /* 学校/休みの2本組トレンドバー(ねた・おきた じかん用) */
+  .tb2col{ display:flex; flex-direction:column; align-items:center; position:relative; }
+  .tbpair{ display:flex; gap:3px; align-items:flex-end; height:56px; }
+  .tbpair .tb{ width:17px; }
+  .tbpair .tb.g{ background:#4f9d45; }
+  .tbpair .tb.r{ background:#d95f4c; }
+  .tb2col>span{ font-size:9px; color:#8d887a; white-space:nowrap; margin-top:2px; }
+  .tb2col em.pl{ font-style:normal; font-size:9px; white-space:nowrap; margin-bottom:1px; }
+  .pl .pg{ color:#2c6e1f; font-weight:700; } .pl .pr{ color:#b34a38; font-weight:700; }
+  .avgline{ font-size:12px; margin:2px 0 4px; }
+  .avgline b{ font-size:13px; }
 
   .goalopts{ display:flex; flex-direction:column; gap:10px; }
   .goalopt{ display:flex; gap:12px; align-items:center; text-align:left; background:#fff;
@@ -787,6 +798,9 @@
     return {sb:avg0(sb), hb:avg0(hb), sw:avg0(sw), hw:avg0(hw), ms:avg0(ms), mh:avg0(mh)};
   }
   function gapVal(dates){ const p=sleepPair(dates); return (p.ms==null||p.mh==null)?null:Math.abs(p.mh-p.ms); }
+  /* 時刻表示(あさ用/よる用)。よるは 20.5→「8じはん」 */
+  function fmtH2(h){ const hh=Math.floor(h), half=(h-hh)>=0.25&&(h-hh)<0.75; return hh+'じ'+(half?'はん':''); }
+  function fmtHE(h){ return fmtH2(h-12); }
   function gapOK(mon){ const g=gapVal(weekDates(mon)); return g==null?null:g<=1; }
 
   /* ---- 期間集計(週・月共通。日付リストを渡す) ---- */
@@ -1321,13 +1335,29 @@
           periods.push(Array.from({length:last},(_,i)=>iso(new Date(m.getFullYear(),m.getMonth(),i+1))));
           xs.push((m.getMonth()+1)+'月'); } }
       const A=periods.map(p=>agg(p));
+      const SP=periods.map(p=>sleepPair(p));
       const tr=(vals,labs)=>'<div class="trend">'+vals.map((h,i)=>'<div class="tb" style="height:'+Math.max(3,Math.min(56,h||0)).toFixed(0)+'px"><em>'+labs[i]+'</em><span>'+xs[i]+'</span></div>').join('')+'</div><div class="tnote"></div>';
+      /* 学校/休みの2本組バー(期間ごとに みどり=学校の日・あか=休みの日 の平均時刻) */
+      const tr2=(vA,vB,lA,lB)=>'<div class="trend" style="height:auto;align-items:flex-end">'+vA.map((h,i)=>
+        '<div class="tb2col"><em class="pl"><span class="pg">'+lA[i]+'</span>/<span class="pr">'+lB[i]+'</span></em>'+
+        '<div class="tbpair">'+
+        '<div class="tb g" style="height:'+Math.max(3,Math.min(56,h||0)).toFixed(0)+'px"></div>'+
+        '<div class="tb r" style="height:'+Math.max(3,Math.min(56,vB[i]||0)).toFixed(0)+'px"></div>'+
+        '</div><span>'+xs[i]+'</span></div>').join('')+'</div>';
+      const fmtOr=(v,f)=>v==null?'—':f(v);
+      const legend2='<div class="legend"><span style="color:#2c6e1f">■ '+T('つぎの日が がっこうの日')+'</span><span style="color:#b34a38">■ '+T('つぎの日が 休みの日')+'</span></div>';
       const cardT=(title,vals,labs,note,calc)=>'<h3>'+title+'</h3><div class="card">'+tr(vals,labs)+
         (note?'<div class="seechip">👀 '+note+'</div>':'')+
         (calc?'<div class="calcnote">※'+calc+'</div>':'')+'</div>';
       app.innerHTML='<h2>これまでの きろく 📚</h2><div class="date">'+(isH?'まえの 4しゅうかん':'つきごと')+'</div>'+seg+
-        cardT('🌙 ねた じかん',A.map(a=>a.bed==null?0:(a.bed-19)*14),A.map(a=>a.bedM||'—'),'ぼうが ひくいほど はやね','その きかんで いちばん おおかった「ねた じかん」')+
-        cardT('☀️ おきた じかん',A.map(a=>a.wake==null?0:(a.wake-5)*14),A.map(a=>a.wakeM||'—'),null,'その きかんで いちばん おおかった「おきた じかん」')+
+        '<h3>🌙 ねた じかん</h3><div class="card">'+
+        tr2(SP.map(s=>s.sb==null?0:(s.sb-19)*14), SP.map(s=>s.hb==null?0:(s.hb-19)*14),
+            SP.map(s=>fmtOr(s.sb,fmtHE)), SP.map(s=>fmtOr(s.hb,fmtHE)))+
+        legend2+'<div class="calcnote">※'+T('きろくが ある日だけの へいきん。ぼうが ひくいほど はやね')+'</div></div>'+
+        '<h3>☀️ おきた じかん</h3><div class="card">'+
+        tr2(SP.map(s=>s.sw==null?0:(s.sw-5)*14), SP.map(s=>s.hw==null?0:(s.hw-5)*14),
+            SP.map(s=>fmtOr(s.sw,fmtH2)), SP.map(s=>fmtOr(s.hw,fmtH2)))+
+        legend2+'<div class="calcnote">※'+T('きろくが ある日だけの へいきん')+'</div></div>'+
         cardT('⏳ すいみんじかん',A.map(a=>a.dur==null?0:(a.dur-6)*10),A.map(a=>a.dur==null?'—':(Math.round(a.dur*10)/10)+'じかん'),'めやすは 9〜12じかん','ねてから おきるまでの ながさの へいきん')+
         cardT('🔄 休みの日との すいみんじかんの ずれ',A.map(a=>a.gap==null?0:a.gap*28),A.map(a=>a.gap==null?'—':(Math.round(a.gap*10)/10)+'じかん'),'1じかんまでが めやす','つぎの日が がっこうの日と 休みの日で、すいみんの まんなかの じこくを くらべた さ')+
         cardT('🎮 ゲーム・どうがが 2じかんより すくない 日',A.map(a=>a.st.ok*7),A.map(a=>a.st.obs?a.st.ok+'日':'—'),null,'あそびの ゲーム・どうが・スマホが 1日 2じかん いか だった 日の かず')+
@@ -1432,12 +1462,14 @@
       '<h2>わたしの 1しゅうかん 📊</h2><div class="date">🗓 '+weekRangeLabel(mon)+'</div>'+seg+
       '<h3>🌙 ねた じかん</h3><div class="card">'+
       (bedMode?'<div class="modeval">いちばん おおかったのは <b>'+bedMode+'</b></div>':'<div class="modeval">まだ きろくが ないよ</div>')+
+      '<div class="avgline">🏫 '+T('つぎの日が がっこうの日:')+' <b>'+(spNow.sb!=null?T(fmtE(spNow.sb)):'—')+'</b> ・ 🏖 '+T('休みの日:')+' <b>'+(spNow.hb!=null?T(fmtE(spNow.hb)):'—')+'</b> <span style="font-size:10px;color:#8d887a">'+T('(こんしゅうの へいきん)')+'</span></div>'+
       dayChart(bed,v=>(v-19)*24,hd,(21-19)*24,'めあて 9じ',[['9じ',48],['10じ',72],['11じ',96]],ds)+
       '<div class="seechip">👀 ぼうが たかい日は、ねるのが おそかった日。まいにち そろっているかな？</div></div>'+
       '<h3>☀️ おきた じかん</h3><div class="card">'+
+      '<div class="avgline">🏫 '+T('つぎの日が がっこうの日:')+' <b>'+(spNow.sw!=null?T(fmtH(spNow.sw)):'—')+'</b> ・ 🏖 '+T('休みの日:')+' <b>'+(spNow.hw!=null?T(fmtH(spNow.hw)):'—')+'</b> <span style="font-size:10px;color:#8d887a">'+T('(こんしゅうの へいきん)')+'</span></div>'+
       dayChart(wake,v=>(v-5)*24,(v,i)=>'wk2'+(i>=5?' hd':''),null,null,[['6じ',24],['7じ',48],['8じ',72],['9じ',96]],ds)+
       '<div class="seechip">👀 いろの うすい ぼう(休みの日)だけ たかく なっていないかな？</div></div>'+
-      '<h3>⏳ ねていた ながさ</h3><div class="card">'+
+      '<h3>⏳ すいみんじかん</h3><div class="card">'+
       dayChart(dur,v=>Math.max(4,(v-6)*18),v=>v>=9?'good':'',54,'めやす 9じかん',[['8じかん',36],['10じかん',72]],ds)+
       '<div class="seechip">👀 めやすは 9〜12じかん。みどりの ぼうは めやすに とどいた日。</div></div>'+
       '<h3>🔄 休みの日との ずれ</h3><div class="card">'+zureHtml+
@@ -1614,10 +1646,11 @@
       save(); go('home'); };
     const pid=S.server.child||'noid', stamp=iso(today());
     const makeCsv=()=>{
-      const head='child,target_date,session,question_id,question_version,answer,latency_sec,input_at\n';
+      const head='child,target_date,target_dow,session,question_id,question_version,answer,latency_sec,input_at\n';
       /* latは2026-07-18から秒(小数1桁)。それ以前のミリ秒値(>150で判別)は秒に換算して出力 */
       const sec=v=>(v==null||v==='')?'':(v>150?Math.round(v/100)/10:v);
-      return head+S.events.filter(e=>e.t==='ans').map(e=>[pid,e.d,e.s,e.q,e.v,e.a,sec(e.lat),e.at].join(',')).join('\n');
+      const dow=d=>{ try{ return DOW1[fromIso(d).getDay()]; }catch(e){ return ''; } };
+      return head+S.events.filter(e=>e.t==='ans').map(e=>[pid,e.d,(e.d?dow(e.d):''),e.s,e.q,e.v,e.a,sec(e.lat),e.at].join(',')).join('\n');
     };
     const fname='kiroku_'+pid+'_'+stamp;
     const markExport=()=>{ S.lastExport=nowIso(); save(); };
