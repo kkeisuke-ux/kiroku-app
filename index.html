@@ -213,26 +213,28 @@
   .sblab{ font-size:11.5px; color:#6b675c; margin:8px 0 2px; font-weight:700; }
   .sbtrack{ position:relative; height:28px; background:#f1efe8; border-radius:8px; }
   .sbtrack .tick{ position:absolute; top:0; bottom:0; width:1px; background:#dcd8cc; }
-  .sbbar{ position:absolute; top:3px; bottom:3px; border-radius:7px; background:var(--night);
+  .sbbar{ position:absolute; top:3px; bottom:3px; border-radius:7px; background:#4f9d45;
     display:flex; align-items:center; justify-content:space-between; padding:0 6px;
-    color:#fff; font-size:10.5px; font-weight:700; white-space:nowrap; }
-  .sbbar.h{ background:#e8940f; }
+    color:#fff; font-size:10.5px; font-weight:700; white-space:nowrap; }   /* 学校の日=緑 */
+  .sbbar.h{ background:#d95f4c; }   /* 休みの日=赤(休日のイメージ) */
   .sbaxis{ position:relative; height:15px; font-size:9.5px; color:#8d887a; margin-top:2px; }
   .sbaxis span{ position:absolute; transform:translateX(-50%); }
-  .sbmid{ position:absolute; top:-3px; transform:translateX(-50%); font-size:11px; color:#c2410c;
-    font-weight:700; text-shadow:0 0 2px #fff; z-index:2; }
-  /* ずれの値ピルと「めやす1じかん」ゲージ */
+  .sbmid{ position:absolute; top:-3px; transform:translateX(-50%); font-size:11px; color:#33312a;
+    font-weight:700; text-shadow:0 0 3px #fff,0 0 3px #fff; z-index:2; }
+  /* ずれの値ピルと「めやす1じかん」ゲージ(0〜2じかんの帯、1じかんに境界線) */
   .zpill{ display:inline-block; padding:1px 10px; border-radius:999px; background:#e2f2d9; color:#2c6e1f; font-weight:700; }
   .zpill.ng{ background:#fde3d1; color:#c2410c; }
-  .zgauge{ position:relative; height:12px; border-radius:6px; margin-top:10px;
-    background:linear-gradient(to right,#bfe3ae 0 50%,#f6c96b 50% 85%,#e8a08b 85% 100%); }
-  .zgauge:after{ content:''; position:absolute; left:50%; top:-2px; bottom:-2px; width:2px;
-    background:#33312a; border-radius:1px; }
-  .zgauge .zg-pin{ position:absolute; top:-12px; transform:translateX(-50%); font-style:normal;
-    font-size:11px; color:#33312a; font-weight:700; }
-  .zgaxis{ position:relative; height:14px; font-size:9.5px; color:#8d887a; }
-  .zgaxis span{ position:absolute; }
-  .zgnote{ font-size:12px; font-weight:700; margin-top:2px; color:#2c6e1f; }
+  .zg-pinrow{ position:relative; height:17px; margin-top:8px; }
+  .zg-pin{ position:absolute; transform:translateX(-50%); font-size:11px; font-weight:700;
+    color:#c2410c; white-space:nowrap; }
+  .zgauge2{ position:relative; display:flex; height:18px; border-radius:9px; overflow:hidden;
+    border:1px solid #cfcaba; }
+  .zgauge2 .ok{ width:50%; background:#bfe3ae; }
+  .zgauge2 .ng{ width:50%; background:#f3b8a9; }
+  .zgauge2 .zg-div{ position:absolute; left:50%; top:0; bottom:0; width:2.5px; background:#33312a; }
+  .zgaxis2{ display:flex; justify-content:space-between; font-size:10px; color:#6b675c; margin-top:2px; }
+  .zgaxis2 .c{ font-weight:700; color:#33312a; }
+  .zgnote{ font-size:12px; font-weight:700; margin-top:4px; color:#2c6e1f; }
   .zgnote.ng{ color:#c2410c; }
   .scorecard{ background:linear-gradient(135deg,#f1f7ec,#e2f0d8); border:2px solid #cfe3c2;
     border-radius:18px; padding:14px; margin-top:14px; display:flex; gap:14px; align-items:center; }
@@ -362,12 +364,12 @@
     try{ const d=JSON.parse(localStorage.getItem(KEY));
       if(d&&d.events){ d.server=d.server||{url:'',token:'',child:''};
         d.weather=d.weather||{}; d.region=d.region||{lat:35.17,lon:136.91};
-        d.pin=d.pin||'1122';
+        d.pin=d.pin||'1122'; d.breaks=d.breaks||[];
         d.owned=d.owned||['flower']; d.buddy=d.buddy||'flower';
         d.care=d.care||{flower:0}; d.coins=(d.coins!=null?d.coins:0);
         d.stars=(d.starsHeld!=null?d.starsHeld:(typeof d.stars==='number'?0:0));  /* もっているスター(財布) */
         return d; } }catch(e){}
-    return {name:'', setup:false, events:[], goals:{}, overrides:{},
+    return {name:'', setup:false, events:[], goals:{}, overrides:{}, breaks:[],
       server:{url:'',token:'',child:''}, weather:{}, region:{lat:35.17,lon:136.91}, pin:'1122',
       owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0};
   }
@@ -433,7 +435,7 @@
   function unsynced(){ return S.events.filter(e=>!e.sy); }
   function snapState(){
     /* サーバに置く復元用スナップショット。なまえ・パスコードは端末外に出さない */
-    return {setup:S.setup, goals:S.goals, overrides:S.overrides, owned:S.owned, buddy:S.buddy,
+    return {setup:S.setup, goals:S.goals, overrides:S.overrides, breaks:S.breaks||[], owned:S.owned, buddy:S.buddy,
       care:S.care, coins:S.coins, stars:S.stars, region:S.region, g:GRADE, at:nowIso()};
   }
   async function syncNow(){
@@ -542,11 +544,11 @@
       const x=new Date(e.d); if(!isNaN(x)) e.d=iso(x); } return e; };
     S={name:(nameOpt!=null?nameOpt:(cur.name||'')), setup:true,
       events:evs.map(e=>{ e.sy=1; return fixD(e); }),
-      goals:{}, overrides:{}, server:{url:url, token:token, child:code},
+      goals:{}, overrides:{}, breaks:[], server:{url:url, token:token, child:code},
       weather:cur.weather||{}, region:cur.region||{lat:35.17,lon:136.91}, pin:cur.pin||'1122',
       owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0};
     const sp=j.snap;
-    if(sp){ ['goals','overrides','owned','buddy','care','coins','stars','region'].forEach(k=>{
+    if(sp){ ['goals','overrides','breaks','owned','buddy','care','coins','stars','region'].forEach(k=>{
       if(sp[k]!=null) S[k]=sp[k]; }); }
     save(); return null;
   }
@@ -564,7 +566,9 @@
     return (a.getMonth()+1)+'/'+a.getDate()+'(月)〜'+(b.getMonth()+1)+'/'+b.getDate()+'(日)'; }
   function isSchool(d){
     const o=S.overrides[iso(d)];
-    if(o) return o==='school';
+    if(o) return o==='school';               /* その日だけの手動切替が最優先 */
+    const di=iso(d);
+    if((S.breaks||[]).some(b=>di>=b.a && di<=b.b)) return false;   /* 長期休み(夏休み等)は毎日「休みの日」 */
     return d.getDay()>=1 && d.getDay()<=5;   /* 既定:月〜金。年間カレンダーは本番でDB化 */
   }
 
@@ -1345,18 +1349,21 @@
     const fmtHM=g=>{ const m=Math.round(Math.abs(g)*60);
       const hh=Math.floor(m/60), mm=m%60;
       return (hh?hh+T('じかん'):'')+((mm||!hh)?mm+T('ふん'):''); };
-    /* めやす(1じかんまで)はゲージで見せる:0〜2じかんの帯、1じかんに境界線 */
+    /* めやす(1じかんまで)のゲージ:0〜2じかんの帯(緑=めやすの中/赤=オーバー)、
+       1じかんに黒い境界線、「いま▼」ピンが現在値を指す */
     const zGauge=g=>{ const a=Math.abs(g), ok=a<=1;
+      const pinL=Math.max(4,Math.min(96,a/2*100)).toFixed(1);
       return '<div class="modeval" style="margin-top:8px">'+T('すいみんじかんの ずれ:')+' <span class="zpill'+(ok?'':' ng')+'">'+fmtHM(a)+'</span></div>'+
-        '<div class="zgauge"><i class="zg-pin" style="left:'+Math.min(100,a/2*100).toFixed(1)+'%">▲</i></div>'+
-        '<div class="zgaxis"><span style="left:0">0</span><span style="left:50%;transform:translateX(-50%)">'+T('1じかん')+'</span><span style="right:0">'+T('2じかん')+'</span></div>'+
-        '<div class="zgnote'+(ok?'':' ng')+'">'+(ok?T('👍 めやす(1じかんまで)の なかだよ！'):T('めやすは 1じかんまで。休みの日も おなじ リズムだと ◎'))+'</div>'; };
+        '<div class="zg-pinrow"><span class="zg-pin" style="left:'+pinL+'%">'+T('いま')+'▼</span></div>'+
+        '<div class="zgauge2"><div class="ok"></div><div class="ng"></div><i class="zg-div"></i></div>'+
+        '<div class="zgaxis2"><span>'+T('ずれ 0')+'</span><span class="c">'+T('↑1じかん(めやす)')+'</span><span>'+T('2じかん〜')+'</span></div>'+
+        '<div class="zgnote'+(ok?'':' ng')+'">'+(ok?T('👍 めやす(1じかんまで)の なかだよ！'):T('めやすより 大きいよ。休みの日も おなじ リズムに してみよう'))+'</div>'; };
     const zDate='<div class="date" style="margin-bottom:4px">🗓 '+T('せんしゅう')+'('+prange+')'+'</div>';
     const haveAll=sp.sb!=null&&sp.sw!=null&&sp.hb!=null&&sp.hw!=null&&sp.ms!=null&&sp.mh!=null;
     const zureHtml= haveAll
       ? zDate+
-        sbRow(T('🏫 つぎの日が がっこうの よる'),sp.sb,sp.sw,sp.ms,'')+
-        sbRow(T('🏖 つぎの日が 休みの よる'),sp.hb,sp.hw,sp.mh,' h')+
+        sbRow(T('🏫 つぎの日が がっこうの日の すいみん'),sp.sb,sp.sw,sp.ms,'')+
+        sbRow(T('🏖 つぎの日が 休みの日の すいみん'),sp.hb,sp.hw,sp.mh,' h')+
         sbAxis+
         zGauge(sp.mh-sp.ms)+
         '<div class="seechip">👀 '+T('▽は すいみんの「まんなかの じこく」。ずれは ▽と ▽の あいだの じかんだよ。げつようびに あたらしく なるよ')+'</div></div>'
@@ -1511,6 +1518,15 @@
       '<div style="margin-top:6px"><input type="text" id="nm" placeholder="なまえ(ひらがな)" value="'+(S.name||'')+'"></div>'+
       '<div style="margin-top:6px"><input type="text" id="pin2" inputmode="numeric" placeholder="おとな用パスコードを変える(現在:'+S.pin+')"></div>'+
       '<button class="a-cta" id="svnm">保存</button></div>'+
+      '<div class="a-sec"><h4>🏖 長期休み(夏休み・冬休み・春休み)の期間</h4>'+
+      ((S.breaks||[]).length
+        ? (S.breaks.map((b,i)=>'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px">'+
+            '<span>'+b.a.replace(/-/g,'/')+' 〜 '+b.b.replace(/-/g,'/')+'</span>'+
+            '<button class="a-cta red" style="width:auto;padding:2px 10px;margin:0" id="bkdel'+i+'">削除</button></div>').join(''))
+        : '<div style="font-size:12px;color:#8d887a;margin-bottom:4px">未設定(土日だけが「休みの日」になります)</div>')+
+      '<div style="display:flex;gap:6px;margin:6px 0"><input type="date" id="bk-a" style="flex:1"><span style="align-self:center">〜</span><input type="date" id="bk-b" style="flex:1"></div>'+
+      '<button class="a-cta" id="bk-add">期間を追加(この間は毎日「休みの日」あつかい)</button>'+
+      '<div class="a-note">夏休みの開始・終了に合わせて一度設定すれば、子どもは何もしなくてOK。振替休日など1日だけの変更は、ホーム下の「きょうは がっこうが ない日？」ボタンで当日切り替えできます。</div></div>'+
       '<div class="a-sec"><h4>エクスポート(研究用・回収)</h4>'+
       '<button class="a-cta" id="exs">📤 CSVを共有(AirDrop・ドライブ等)</button>'+
       '<button class="a-cta" id="exc">💾 CSVをダウンロード(端末に保存)</button>'+
@@ -1577,6 +1593,13 @@
     document.getElementById('excp').onclick=async()=>{
       try{ await navigator.clipboard.writeText(makeCsv()); markExport(); alert('コピーしました。回収用フォームやメモに貼り付けてください'); }
       catch(e){ alert('コピーできませんでした。「ダウンロード」を使ってください'); } };
+    document.getElementById('bk-add').onclick=()=>{
+      const a=document.getElementById('bk-a').value, b=document.getElementById('bk-b').value;
+      if(!a||!b){ alert('開始日と終了日を選んでください'); return; }
+      if(a>b){ alert('開始日が終了日より後になっています'); return; }
+      S.breaks=S.breaks||[]; S.breaks.push({a:a,b:b}); save(); go('data'); };
+    (S.breaks||[]).forEach((b,i)=>{ const el=document.getElementById('bkdel'+i);
+      if(el) el.onclick=()=>{ S.breaks.splice(i,1); save(); go('data'); }; });
     document.getElementById('demo').onclick=()=>{ genDemo(); alert('デモデータを生成しました'); go('home'); };
     document.getElementById('wipe').onclick=()=>{ if(confirm('本当に全データを削除しますか？(元に戻せません)')){
       S={name:S.name, setup:true, events:[], goals:{}, overrides:{},
