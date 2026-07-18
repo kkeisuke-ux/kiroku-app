@@ -1874,8 +1874,10 @@
       default: renderHome();
     }
   }
-  /* 回収モード:URLの最後に #kaishu を付けて開くと⚙️(エクスポート)画面へ直行 */
+  /* 回収モード:URLの最後に #kaishu を付けると⚙️(エクスポート)画面へ、
+     ?report を付けると おうちの人向けレポートへ直行(例 #g23?report) */
   if(/kaishu|data/.test(location.hash)) scr={name:'data'};   /* #kaishu / #g23?kaishu 等で回収画面へ */
+  else if(/report/.test(location.hash)&&S.setup) scr={name:'parent'};
   render();
   restoreFromMirror();   /* localStorage消失時はミラーから自動復元して再描画 */
   /* 電波が戻った時・アプリに戻ってきた時に未送信分を自動再送 */
