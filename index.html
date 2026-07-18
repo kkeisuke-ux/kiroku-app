@@ -1590,6 +1590,8 @@
       '<div style="margin-top:6px"><input type="text" id="nm" placeholder="なまえ(ひらがな)" value="'+(S.name||'')+'"></div>'+
       '<div style="margin-top:6px"><input type="text" id="pin2" inputmode="numeric" placeholder="おとな用パスコードを変える(現在:'+S.pin+')"></div>'+
       '<button class="a-cta" id="svnm">保存</button></div>'+
+      '<div class="a-sec"><h4>👨‍👩‍👧 おうちの人向けレポート</h4>'+
+      '<button class="a-cta" id="prep">直近4週間のレポートを開く(睡眠・メディア・あそび)</button></div>'+
       '<div class="a-sec"><h4>🏖 長期休み(夏休み・冬休み・春休み)の期間</h4>'+
       ((S.breaks||[]).length
         ? (S.breaks.map((b,i)=>'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px">'+
@@ -1666,6 +1668,7 @@
     document.getElementById('excp').onclick=async()=>{
       try{ await navigator.clipboard.writeText(makeCsv()); markExport(); alert('コピーしました。回収用フォームやメモに貼り付けてください'); }
       catch(e){ alert('コピーできませんでした。「ダウンロード」を使ってください'); } };
+    document.getElementById('prep').onclick=()=>go('parent');
     document.getElementById('bk-add').onclick=()=>{
       const a=document.getElementById('bk-a').value, b=document.getElementById('bk-b').value;
       if(!a||!b){ alert('開始日と終了日を選んでください'); return; }
@@ -1742,6 +1745,51 @@
       pwSetNote=true; go('home'); };
   }
 
+  /* ============ おうちの人向けレポート(大人向け・⚙️から開く) ============ */
+  function renderParent(){
+    const t=today();
+    /* 直近4週間(今週を含む、月曜起点) */
+    const w0=weekMonday(t);
+    const weeks=[3,2,1,0].map(n=>weekDates(weekMonday(addDays(fromIso(w0),-7*n))));
+    const all=weeks.flat().filter(d=>d<=iso(t));
+    const last14=Array.from({length:14},(_,i)=>iso(addDays(t,-13+i)));
+    const sp=sleepPair(all), zg=gapVal(all), dur=durAvgD(all);
+    const recDays=all.filter(d=>completed(d,'m')||completed(d,'k')).length;
+    const stArr=[]; all.forEach(d=>{ const g=ans(d,'M4'); if(g===1){ stArr.push(0); return; }
+      const a=ans(d,'M4a'); if(a!=null&&a!=='DK') stArr.push(ST_H[a]); });
+    const stAvg=stArr.length?avg(stArr):null;
+    const stOver=stArr.filter(v=>v>2).length;
+    const soto=sotoD(all), move=moveDates(all);
+    const hitoriHiru=last14.filter(d=>ans(d,'K3')===0).length;
+    const hitoriHou=last14.filter(d=>ans(d,'M5c')===0).length;
+    const hitori=hitoriHiru+hitoriHou;
+    const fT=h=>h==null?'—':fmtH2(h>=19?h-12:h);
+    const range=(x=>{const a=fromIso(weeks[0][0]);return (a.getMonth()+1)+'/'+a.getDate()+'〜'+(t.getMonth()+1)+'/'+t.getDate();})();
+    const row=(k,v)=>'<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed #eee"><span>'+k+'</span><b>'+v+'</b></div>';
+    app.innerHTML='<div class="adult"><h2>👨‍👩‍👧 おうちの人向けレポート</h2>'+
+      '<div class="date">'+(S.name||'')+'さん / 直近4週間('+range+') / 作成 '+(t.getMonth()+1)+'/'+t.getDate()+'</div>'+
+      '<div class="a-sec"><h4>記録の状況</h4>'+row('記録できた日',recDays+'日 / '+all.length+'日')+'</div>'+
+      '<div class="a-sec"><h4>睡眠</h4>'+
+      row('就寝(翌日が学校の日)',fT(sp.sb))+row('就寝(翌日が休みの日)',fT(sp.hb))+
+      row('起床(学校の日)',fT(sp.sw))+row('起床(休みの日)',fT(sp.hw))+
+      row('睡眠時間の平均',dur==null?'—':(Math.round(dur*10)/10)+'時間')+
+      row('休みの日との睡眠のずれ',zg==null?'—':(Math.round(zg*60)+'分'+(zg<=1?'(目安の範囲内)':'(目安1時間を超過)')))+
+      '<div class="a-note">ずれ=「翌日が学校の日」と「翌日が休みの日」の睡眠中央時刻(就寝と起床の中間)の差。1時間以内が目安とされます。</div></div>'+
+      '<div class="a-sec"><h4>メディア・あそび</h4>'+
+      row('遊びのゲーム・動画・スマホ(1日平均)',stAvg==null?'—':(Math.round(stAvg*10)/10)+'時間')+
+      row('2時間を超えた日',stOver+'日 / '+stArr.length+'日')+
+      row('外で遊んだ日',soto+'日')+row('汗をかく遊び・運動をした日',move+'日')+'</div>'+
+      '<div class="a-sec"><h4>気になるサイン(直近2週間)</h4>'+
+      row('休み時間や放課後に「ひとり」と答えた回数',hitori+'回')+
+      (hitori>=4?'<div class="a-note" style="color:#c2410c">「ひとり」の回答がやや多めです。本人の様子を気にかけてあげてください(ひとりで過ごすのが好きな場合もあります)。</div>'
+                :'<div class="a-note">現時点で特に気になる傾向はありません。</div>')+'</div>'+
+      '<div class="a-note">※このレポートは子どもの自己申告に基づく参考情報です。数値のみで判断せず、本人との会話のきっかけとしてお使いください。</div>'+
+      '<button class="a-cta" id="pprint">🖨 印刷する</button>'+
+      '<button class="a-cta gray" id="back">← 戻る</button></div>';
+    document.getElementById('back').onclick=()=>go('data');
+    document.getElementById('pprint').onclick=()=>window.print();
+  }
+
   /* ============ ながい おやすみ(長期休み)の設定(子どもが自分で操作) ============ */
   function renderBreaks(){
     const list=(S.breaks||[]).map((b,i)=>
@@ -1814,6 +1862,7 @@
       case 'home': renderHome(); break;
       case 'pwset': renderPwset(); break;
       case 'breaks': renderBreaks(); break;
+      case 'parent': renderParent(); break;
       case 'flow': renderFlow(); break;
       case 'editday': renderEditConfirm(scr.arg); break;
       case 'week': renderWeek(); break;

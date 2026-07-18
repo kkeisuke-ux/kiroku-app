@@ -1,0 +1,163 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>まいにち きろく - 先生向けダッシュボード</title>
+<style>
+  body{ margin:0; background:#eef0f3; color:#33312a;
+    font-family:"BIZ UDPGothic","Hiragino Maru Gothic ProN","Yu Gothic UI","Meiryo",sans-serif; line-height:1.7; }
+  .wrap{ max-width:980px; margin:0 auto; padding:18px; }
+  h1{ font-size:20px; margin:6px 0 2px; }
+  .sub{ font-size:12px; color:#6b675c; margin-bottom:14px; }
+  .card{ background:#fff; border-radius:14px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .cfg{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .cfg input,.cfg select{ font:inherit; padding:7px 10px; border:1.5px solid #cfcaba; border-radius:8px; }
+  .cfg input#url{ flex:1; min-width:260px; } .cfg input#tok{ width:220px; }
+  button{ font:inherit; cursor:pointer; }
+  .btn{ background:#4f9d45; color:#fff; border:none; border-radius:8px; padding:8px 18px; font-weight:700; }
+  .btn.gray{ background:#8d887a; }
+  #msg{ font-size:13px; color:#c2410c; min-height:20px; }
+  table{ border-collapse:collapse; width:100%; font-size:12.5px; }
+  th,td{ border-bottom:1px solid #eceade; padding:6px 8px; text-align:center; white-space:nowrap; }
+  th{ background:#f7f5ee; font-size:11.5px; position:sticky; top:0; }
+  td.l{ text-align:left; font-weight:700; }
+  .warn{ background:#fdeae2; color:#c2410c; font-weight:700; border-radius:6px; }
+  .ok2{ color:#2c6e1f; }
+  .note{ font-size:11.5px; color:#6b675c; }
+  .tblwrap{ overflow-x:auto; }
+  @media print{ .cfg,.btn,#msg{ display:none; } body{ background:#fff; } }
+</style>
+<div class="wrap">
+  <h1>🏫 まいにち きろく - 先生向けダッシュボード</h1>
+  <div class="sub">クラスの記録状況の一覧(仮名IDごと)。名前はサーバにないため、お手元の「名前⇔仮名ID」名簿と突き合わせてご覧ください。</div>
+  <div class="card cfg">
+    <input id="url" placeholder="サーバURL(…/exec)">
+    <input id="tok" type="password" placeholder="研究者用トークン(ADMIN_TOKEN)">
+    <select id="days"><option value="7">直近7日</option><option value="14">直近14日</option><option value="28">直近28日</option></select>
+    <button class="btn" id="load">読み込む</button>
+    <button class="btn gray" id="print">🖨 印刷</button>
+    <div class="note" style="flex-basis:100%">トークンはこの端末のブラウザ内にのみ保存されます。共用PCでは読み込み後にトークン欄を消してください。</div>
+    <div id="msg"></div>
+  </div>
+  <div class="card tblwrap" id="out"><div class="note">サーバURLとトークンを入れて「読み込む」を押してください。</div></div>
+  <div class="note">見方:⚠は「昼休み・放課後に『ひとり』が直近2週間で4回以上」または「睡眠のずれが1時間超」。数値は子どもの自己申告に基づく参考情報です。学校日の判定は月〜金(端末ごとの長期休み設定は反映されません)。</div>
+</div>
+<script>
+(function(){
+  'use strict';
+  var BED_H=[19.5,20,20.5,21,21.5,22,22.5,23,23.5];
+  var WAKE_H=[5.5,6,6.5,7,7.5,8,8.5,9,9.5];
+  var ST_H=[0,0.5,1,2,3];
+  var DOW=['日','月','火','水','木','金','土'];
+
+  function normD(d){ /* 旧データはSheets日付化でISO日時の場合あり→端末TZで日付へ */
+    d=String(d||''); if(d.indexOf('T')>0){ var x=new Date(d); if(!isNaN(x)){
+      return x.getFullYear()+'-'+('0'+(x.getMonth()+1)).slice(-2)+'-'+('0'+x.getDate()).slice(-2); } }
+    return d.slice(0,10); }
+  function fromIso(s){ var p=s.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); }
+  function isWeekday(d){ var w=fromIso(d).getDay(); return w>=1&&w<=5; }
+  function avg(v){ return v.reduce(function(a,b){return a+b;},0)/v.length; }
+  function fmtT(h){ if(h==null) return '—'; if(h>=19) h-=12;
+    var hh=Math.floor(h), half=(h-hh)>=0.25&&(h-hh)<0.75; return hh+'時'+(half?'半':''); }
+
+  /* rows(export形式)→ 子どもごとの集計。純関数(テスト可能) */
+  function computeStats(head, rows, days, todayIso){
+    var ix={}; head.forEach(function(k,i){ ix[k]=i; });
+    var win=[]; var t=fromIso(todayIso);
+    for(var i=days-1;i>=0;i--){ var x=new Date(t); x.setDate(x.getDate()-i);
+      win.push(x.getFullYear()+'-'+('0'+(x.getMonth()+1)).slice(-2)+'-'+('0'+x.getDate()).slice(-2)); }
+    var winSet={}; win.forEach(function(d){ winSet[d]=1; });
+    var last14={}; for(var j=13;j>=0;j--){ var y=new Date(t); y.setDate(y.getDate()-j);
+      last14[y.getFullYear()+'-'+('0'+(y.getMonth()+1)).slice(-2)+'-'+('0'+y.getDate()).slice(-2)]=1; }
+
+    var A={};   /* child -> date -> qid -> {a, at} 最新回答 */
+    var lastRec={};
+    rows.forEach(function(r){
+      var c=String(r[ix.child]); if(!c) return;
+      var at=String(r[ix.at]||'');
+      if(!lastRec[c]||at>lastRec[c]) lastRec[c]=at;
+      if(String(r[ix.t])!=='ans') return;
+      var d=normD(r[ix.d]); if(!d) return;
+      var q=String(r[ix.q]);
+      A[c]=A[c]||{}; A[c][d]=A[c][d]||{};
+      if(!A[c][d][q]||at>A[c][d][q].at) A[c][d][q]={a:r[ix.a], at:at};
+    });
+    function ans(c,d,q){ var v=A[c]&&A[c][d]&&A[c][d][q]; return v?v.a:null; }
+    function num(v){ return (v==null||v==='DK'||v==='')?null:+v; }
+
+    return Object.keys(A).sort().map(function(c){
+      var recDays=0, sb=[],sw=[],ms=[],mh=[], soto=0, stOver=0, stObs=0, hitori=0;
+      win.forEach(function(d){
+        var any=false;
+        ['M1','M2','M3','M4','M5','K1','K2','G1OUT'].forEach(function(q){ if(ans(c,d,q)!=null) any=true; });
+        if(any) recDays++;
+        var b=num(ans(c,d,'M2')), w=num(ans(c,d,'M3'));
+        var sch=isWeekday(d);
+        if(b!=null&&sch) sb.push(BED_H[b]);
+        if(w!=null&&sch) sw.push(WAKE_H[w]);
+        if(b!=null&&w!=null) (sch?ms:mh).push((BED_H[b]+WAKE_H[w]+24)/2);
+        var p=num(ans(c,d,'M5a')), k1=num(ans(c,d,'K1')), k2=num(ans(c,d,'K2'));
+        if(p===0||p===2||k1===0||k2===0) soto++;
+        var g=ans(c,d,'M4');
+        if(+g===1){ stObs++; }
+        else{ var sa=num(ans(c,d,'M4a')); if(sa!=null){ stObs++; if(ST_H[sa]>2) stOver++; } }
+      });
+      Object.keys(last14).forEach(function(d){
+        if(num(ans(c,d,'K3'))===0) hitori++;
+        if(num(ans(c,d,'M5c'))===0) hitori++;
+      });
+      var gap=(ms.length&&mh.length)?Math.abs(avg(mh)-avg(ms)):null;
+      return { child:c, recDays:recDays, winLen:win.length,
+        bed:sb.length?avg(sb):null, wake:sw.length?avg(sw):null,
+        gapMin:gap==null?null:Math.round(gap*60),
+        soto:soto, stOver:stOver, stObs:stObs, hitori:hitori,
+        last:(lastRec[c]||'').slice(0,10) };
+    });
+  }
+  window.__computeStats=computeStats;   /* テスト用 */
+
+  var CFG_KEY='kiroku_teacher_cfg';
+  var DEFAULT_URL='https://script.google.com/macros/s/AKfycbyXXo8g_ecYM23x6u73osy5hBCts269psRUVU2PDJc6lR4IZpd-2rRMqg6cN9UANZv1bQ/exec';
+  var saved={}; try{ saved=JSON.parse(localStorage.getItem(CFG_KEY))||{}; }catch(e){}
+  document.getElementById('url').value=saved.url||DEFAULT_URL;
+  document.getElementById('tok').value=saved.tok||'';
+  if(saved.days) document.getElementById('days').value=saved.days;
+
+  document.getElementById('print').onclick=function(){ window.print(); };
+  document.getElementById('load').onclick=function(){
+    var url=document.getElementById('url').value.trim();
+    var tok=document.getElementById('tok').value.trim();
+    var days=+document.getElementById('days').value;
+    var msg=document.getElementById('msg'), out=document.getElementById('out');
+    if(!url||!tok){ msg.textContent='サーバURLとトークンを入れてください'; return; }
+    try{ localStorage.setItem(CFG_KEY, JSON.stringify({url:url,tok:tok,days:days})); }catch(e){}
+    msg.textContent='読み込み中…';
+    fetch(url+'?action=export&token='+encodeURIComponent(tok))
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(!j.ok){ msg.textContent='サーバ応答エラー:'+(j.error||'不明')+'(トークンを確認)'; return; }
+        var t=new Date();
+        var todayIso=t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2);
+        var st=computeStats(j.head, j.rows, days, todayIso);
+        msg.textContent='';
+        if(!st.length){ out.innerHTML='<div class="note">データがまだありません。</div>'; return; }
+        var h='<table><tr><th>仮名ID</th><th>記録日数<br>(直近'+days+'日)</th><th>最終記録</th>'+
+          '<th>就寝平均<br>(学校日)</th><th>起床平均<br>(学校日)</th><th>睡眠のずれ</th>'+
+          '<th>外遊び<br>(日)</th><th>ゲーム等<br>2時間超(日)</th><th>「ひとり」<br>(2週間)</th></tr>';
+        st.forEach(function(s){
+          var gapCell=s.gapMin==null?'—':(s.gapMin+'分');
+          var gapCls=(s.gapMin!=null&&s.gapMin>60)?' class="warn"':'';
+          var hitCls=(s.hitori>=4)?' class="warn"':'';
+          h+='<tr><td class="l">'+s.child+'</td>'+
+            '<td'+(s.recDays===0?' class="warn"':'')+'>'+s.recDays+'/'+s.winLen+'</td>'+
+            '<td>'+(s.last||'—')+'</td>'+
+            '<td>'+fmtT(s.bed)+'</td><td>'+fmtT(s.wake)+'</td>'+
+            '<td'+gapCls+'>'+gapCell+'</td>'+
+            '<td>'+s.soto+'</td><td>'+(s.stObs?s.stOver+'/'+s.stObs:'—')+'</td>'+
+            '<td'+hitCls+'>'+s.hitori+'回'+(s.hitori>=4?' ⚠':'')+'</td></tr>';
+        });
+        h+='</table>';
+        out.innerHTML=h;
+      })
+      .catch(function(e){ msg.textContent='通信できませんでした:'+e.message; });
+  };
+})();
+</script>
