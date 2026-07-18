@@ -236,6 +236,14 @@
   .zgaxis2 .c{ font-weight:700; color:#33312a; }
   .zgnote{ font-size:12px; font-weight:700; margin-top:4px; color:#2c6e1f; }
   .zgnote.ng{ color:#c2410c; }
+  /* 曜日の下の小さな日付、グラフ下の計算注記、めあての日別スター */
+  .stdays em,.dy em{ display:block; font-size:8.5px; color:#a7a294; font-style:normal; font-weight:400; }
+  .calcnote{ font-size:9.5px; color:#a7a294; margin-top:4px; line-height:1.5; }
+  .gdays{ display:flex; gap:4px; margin-top:8px; }
+  .gd{ flex:1; text-align:center; background:#f7f5ee; border:1px solid #e8e4d8; border-radius:8px; padding:3px 0 2px; }
+  .gd.on{ background:#fff6d8; border-color:#f0d98c; }
+  .gd i{ display:block; height:18px; font-style:normal; font-size:14px; line-height:18px; }
+  .gd em,.gd u{ display:block; font-style:normal; text-decoration:none; font-size:9px; color:#8d887a; }
   .scorecard{ background:linear-gradient(135deg,#f1f7ec,#e2f0d8); border:2px solid #cfe3c2;
     border-radius:18px; padding:14px; margin-top:14px; display:flex; gap:14px; align-items:center; }
   .scorecard .pt{ font-size:36px; font-weight:700; color:#3f7a34; line-height:1; }
@@ -730,11 +738,15 @@
 
   /* ============ 目標メニュー(goal_ladder 簡易版) ============ */
   const GOALS=[
-    {code:'bed9', e:'🌙', label:'よるは 9じまでに ねる日を ふやす', judge:w=>cntWeek(w,'M2',a=>a<=3)},
+    {code:'bed9', e:'🌙', label:'よるは 9じまでに ねる日を ふやす', judge:w=>cntWeek(w,'M2',a=>a<=3),
+      dayOK:d=>{ const a=ans(d,'M2'); return a!=null&&a!=='DK'&&a<=3; }},
     {code:'gap1', e:'🔄', label:'休みの日も おきる じかんの ずれを 1じかんまでに', judge:w=>gapOK(w)?7:0, gapGoal:true},
-    {code:'st2',  e:'🎮', label:'ゲーム・どうがは 2じかんまでの日を ふやす', judge:w=>cntWeek(w,'M4a',a=>a<=3)+cntNoSt(w)},
-    {code:'move', e:'🏃', label:'からだを うごかす あそびを ふやす', judge:w=>cntWeek(w,'M5',a=>a===0)},
-    {code:'soto', e:'🌳', label:'そとで あそぶ日を ふやす', judge:w=>sotoDays(w)},
+    {code:'st2',  e:'🎮', label:'ゲーム・どうがは 2じかんまでの日を ふやす', judge:w=>cntWeek(w,'M4a',a=>a<=3)+cntNoSt(w),
+      dayOK:d=>{ if(ans(d,'M4')===1) return true; const a=ans(d,'M4a'); return a!=null&&a!=='DK'&&a<=3; }},
+    {code:'move', e:'🏃', label:'からだを うごかす あそびを ふやす', judge:w=>cntWeek(w,'M5',a=>a===0),
+      dayOK:d=>ans(d,'M5')===0},
+    {code:'soto', e:'🌳', label:'そとで あそぶ日を ふやす', judge:w=>sotoDays(w),
+      dayOK:d=>{ const p=ans(d,'M5a'),k1=ans(d,'K1'),k2=ans(d,'K2'); return p===0||p===2||k1===0||k2===0; }},
   ];
   const DEFAULT_TARGET=3;
 
@@ -788,7 +800,11 @@
   function moveDates(dates){ return dates.filter(d=>ans(d,'M5')===0).length; }
   function stOkD(dates){ let ok=0,obs=0; dates.forEach(d=>{ const g=ans(d,'M4');
     if(g===1){ok++;obs++;return;} const a=ans(d,'M4a'); if(a!=null&&a!=='DK'){obs++; if(ST_H[a]<=2) ok++;}}); return {ok,obs}; }
-  function starsD(dates){ let n=0; S.events.forEach(e=>{ if(e.t==='star'&&dates.includes((e.at||'').slice(0,10))) n+=e.n; }); return n; }
+  function starsD(dates){ let n=0; S.events.forEach(e=>{
+    if(!dates.includes((e.at||'').slice(0,10))) return;
+    if(e.t==='buystar') n+=1;                 /* ショップでスターを手に入れた */
+    else if(e.t==='star'&&e.n) n+=e.n; });    /* 旧形式の保険 */
+    return n; }
   function agg(dates){ return {bed:avgSlotD(dates,'M2',BED_H), bedM:modeSlotD(dates,'M2',BED),
     wake:avgSlotD(dates,'M3',WAKE_H), wakeM:modeSlotD(dates,'M3',WAKE), dur:durAvgD(dates),
     gap:gapVal(dates), st:stOkD(dates), soto:sotoD(dates), move:moveDates(dates), stars:starsD(dates)}; }
@@ -1258,13 +1274,16 @@
   }
 
   /* ============ わたしの1しゅうかん(実データ) ============ */
-  function dayChart(vals,mapFn,colorFn,gB,gL,ticks){
+  function dayChart(vals,mapFn,colorFn,gB,gL,ticks,ds){
     const bars=vals.map((v,i)=> v==null?'<div class="none"></div>':
       '<div class="b '+colorFn(v,i)+'" style="height:'+Math.min(96,mapFn(v)).toFixed(0)+'px"></div>').join('');
     const gl=gB!=null?('<div class="gline" style="bottom:'+gB+'px"><em>'+gL+'</em></div>'):'';
     return '<div class="chartgrid"><div class="yax">'+ticks.map(t=>'<span style="bottom:'+t[1]+'px">'+t[0]+'</span>').join('')+'</div>'+
       '<div><div class="daychart">'+gl+bars+'</div>'+
-      '<div class="stdays">'+['げつ','か','すい','もく','きん','ど','にち'].map((d,i)=>'<span class="'+(i>=5?'hd':'')+'">'+d+'</span>').join('')+'</div></div></div>';
+      '<div class="stdays">'+['げつ','か','すい','もく','きん','ど','にち'].map((d,i)=>{
+        const x=ds?fromIso(ds[i]):null;
+        return '<span class="'+(i>=5?'hd':'')+'">'+d+(x?'<em>'+(x.getMonth()+1)+'/'+x.getDate()+'</em>':'')+'</span>';
+      }).join('')+'</div></div></div>';
   }
   function renderWeek(mode){
     mode=mode||'now';
@@ -1303,16 +1322,18 @@
           xs.push((m.getMonth()+1)+'月'); } }
       const A=periods.map(p=>agg(p));
       const tr=(vals,labs)=>'<div class="trend">'+vals.map((h,i)=>'<div class="tb" style="height:'+Math.max(3,Math.min(56,h||0)).toFixed(0)+'px"><em>'+labs[i]+'</em><span>'+xs[i]+'</span></div>').join('')+'</div><div class="tnote"></div>';
-      const cardT=(title,vals,labs,note)=>'<h3>'+title+'</h3><div class="card">'+tr(vals,labs)+(note?'<div class="seechip">👀 '+note+'</div>':'')+'</div>';
+      const cardT=(title,vals,labs,note,calc)=>'<h3>'+title+'</h3><div class="card">'+tr(vals,labs)+
+        (note?'<div class="seechip">👀 '+note+'</div>':'')+
+        (calc?'<div class="calcnote">※'+calc+'</div>':'')+'</div>';
       app.innerHTML='<h2>これまでの きろく 📚</h2><div class="date">'+(isH?'まえの 4しゅうかん':'つきごと')+'</div>'+seg+
-        cardT('🌙 ねた じかん(よく あった じかん)',A.map(a=>a.bed==null?0:(a.bed-19)*14),A.map(a=>a.bedM||'—'),'ぼうが ひくいほど はやね')+
-        cardT('☀️ おきた じかん',A.map(a=>a.wake==null?0:(a.wake-5)*14),A.map(a=>a.wakeM||'—'),null)+
-        cardT('⏳ ねむりの ながさ',A.map(a=>a.dur==null?0:(a.dur-6)*10),A.map(a=>a.dur==null?'—':(Math.round(a.dur*10)/10)+'じかん'),'めやすは 9〜12じかん')+
-        cardT('🔄 休みの日との ずれ',A.map(a=>a.gap==null?0:a.gap*28),A.map(a=>a.gap==null?'—':(Math.round(a.gap*10)/10)+'じかん'),'1じかんまでが めやす')+
-        cardT('🎮 ゲーム・どうがが めやすの なかの 日',A.map(a=>a.st.ok*7),A.map(a=>a.st.obs?a.st.ok+'日':'—'),null)+
-        cardT('🌳 そとで あそんだ日',A.map(a=>a.soto*7),A.map(a=>a.soto+'日'),null)+
-        cardT('💪 からだを うごかした日',A.map(a=>a.move*7),A.map(a=>a.move+'日'),null)+
-        cardT('⭐ あつめた スター',A.map(a=>a.stars*3),A.map(a=>a.stars+'こ'),'きろくが たまると グラフが そだつよ')+
+        cardT('🌙 ねた じかん',A.map(a=>a.bed==null?0:(a.bed-19)*14),A.map(a=>a.bedM||'—'),'ぼうが ひくいほど はやね','その きかんで いちばん おおかった「ねた じかん」')+
+        cardT('☀️ おきた じかん',A.map(a=>a.wake==null?0:(a.wake-5)*14),A.map(a=>a.wakeM||'—'),null,'その きかんで いちばん おおかった「おきた じかん」')+
+        cardT('⏳ すいみんじかん',A.map(a=>a.dur==null?0:(a.dur-6)*10),A.map(a=>a.dur==null?'—':(Math.round(a.dur*10)/10)+'じかん'),'めやすは 9〜12じかん','ねてから おきるまでの ながさの へいきん')+
+        cardT('🔄 休みの日との すいみんじかんの ずれ',A.map(a=>a.gap==null?0:a.gap*28),A.map(a=>a.gap==null?'—':(Math.round(a.gap*10)/10)+'じかん'),'1じかんまでが めやす','つぎの日が がっこうの日と 休みの日で、すいみんの まんなかの じこくを くらべた さ')+
+        cardT('🎮 ゲーム・どうがが 2じかんより すくない 日',A.map(a=>a.st.ok*7),A.map(a=>a.st.obs?a.st.ok+'日':'—'),null,'あそびの ゲーム・どうが・スマホが 1日 2じかん いか だった 日の かず')+
+        cardT('🌳 そとで あそんだ日',A.map(a=>a.soto*7),A.map(a=>a.soto+'日'),null,'そとで あそんだと こたえた 日の かず')+
+        cardT('💪 からだを うごかした日',A.map(a=>a.move*7),A.map(a=>a.move+'日'),null,'はしったり あせを かく あそびや うんどうを した 日の かず')+
+        cardT('⭐ あつめた スター',A.map(a=>a.stars*3),A.map(a=>a.stars+'こ'),'きろくが たまると グラフが そだつよ','その きかんに 手に入れた スターの かず')+
         '<div class="backrow"><button class="backbtn" id="back">← ホームへ</button></div>';
       bindWeekSeg(); document.getElementById('back').onclick=()=>go('home'); return;
     }
@@ -1327,11 +1348,20 @@
     const hd=(v,i)=>i>=5?'hd':'';
     const bedMode=modeSlotD(ds,'M2',BED);
     const fmtH=h=>{ const hh=Math.floor(h), half=(h-hh)>=0.25&&(h-hh)<0.75; return hh+'じ'+(half?'はん':''); };
-    /* ずれカードは「点数」と同じく、終わった1週間(せんしゅう月〜日)を対象にする */
+    /* ずれカードの対象週:こんしゅうのデータが揃い次第(学校前夜と休み前夜の両方)
+       こんしゅうの途中経過を表示。揃うまでは、完成しているせんしゅうの結果を表示 */
     const prevMon=weekMonday(addDays(fromIso(mon),-7));
     const pd0=fromIso(prevMon), pd6=addDays(pd0,6);
     const prange=(pd0.getMonth()+1)+'/'+pd0.getDate()+'〜'+(pd6.getMonth()+1)+'/'+pd6.getDate();
-    const sp=sleepPair(weekDates(prevMon));
+    const nd0=fromIso(mon), nd6=addDays(nd0,6);
+    const nrange=(nd0.getMonth()+1)+'/'+nd0.getDate()+'〜'+(nd6.getMonth()+1)+'/'+nd6.getDate();
+    const spNow=sleepPair(ds), spPrev=sleepPair(weekDates(prevMon));
+    const zAll=p=>p.sb!=null&&p.sw!=null&&p.hb!=null&&p.hw!=null&&p.ms!=null&&p.mh!=null;
+    let sp, zLabel;
+    if(zAll(spNow)){ sp=spNow; zLabel='🗓 '+T('こんしゅう')+'('+nrange+')・'+T('いままでの きろくで けいさん'); }
+    else if(zAll(spPrev)){ sp=spPrev; zLabel='🗓 '+T('せんしゅう')+'('+prange+')'; }
+    else if(spNow.sw!=null&&spNow.hw!=null){ sp=spNow; zLabel='🗓 '+T('こんしゅう')+'('+nrange+')'; }
+    else { sp=spPrev; zLabel='🗓 '+T('せんしゅう')+'('+prange+')'; }
     /* 睡眠バー:時間軸19時〜翌12時(17時間)。夜は「つぎの日」で分類 */
     const sbPos=h=>((h-19)/17*100);
     const fmtE=h=>fmtH(h-12);   /* 20.5→「8じはん」(よる) */
@@ -1360,23 +1390,23 @@
         '<div class="zgauge2"><div class="ok"></div><div class="ng"></div><i class="zg-div"></i></div>'+
         '<div class="zgaxis2"><span>'+T('ずれ 0')+'</span><span class="c">'+T('↑1じかん(めやす)')+'</span><span>'+T('2じかん〜')+'</span></div>'+
         '<div class="zgnote'+(ok?'':' ng')+'">'+(ok?T('👍 めやす(1じかんまで)の なかだよ！'):T('めやすより 大きいよ。休みの日も おなじ リズムに してみよう'))+'</div>'; };
-    const zDate='<div class="date" style="margin-bottom:4px">🗓 '+T('せんしゅう')+'('+prange+')'+'</div>';
-    const haveAll=sp.sb!=null&&sp.sw!=null&&sp.hb!=null&&sp.hw!=null&&sp.ms!=null&&sp.mh!=null;
+    const zDate='<div class="date" style="margin-bottom:4px">'+zLabel+'</div>';
+    const haveAll=zAll(sp);
     const zureHtml= haveAll
       ? zDate+
         sbRow(T('🏫 つぎの日が がっこうの日の すいみん'),sp.sb,sp.sw,sp.ms,'')+
         sbRow(T('🏖 つぎの日が 休みの日の すいみん'),sp.hb,sp.hw,sp.mh,' h')+
         sbAxis+
         zGauge(sp.mh-sp.ms)+
-        '<div class="seechip">👀 '+T('▽は すいみんの「まんなかの じこく」。ずれは ▽と ▽の あいだの じかんだよ。げつようびに あたらしく なるよ')+'</div></div>'
+        '<div class="seechip">👀 '+T('▽は すいみんの「まんなかの じこく」。ずれは ▽と ▽の あいだの じかんだよ')+'</div></div>'
       : (sp.sw!=null&&sp.hw!=null)
       ? zDate+'<div class="zure">'+
         '<div class="zrow"><span class="zlab">'+T('がっこうの日に おきた じかん')+'</span><div class="zbar" style="width:'+((sp.sw-5)*24).toFixed(0)+'px"><span>'+T(fmtH(sp.sw))+'</span></div></div>'+
         '<div class="zrow"><span class="zlab">'+T('休みの日に おきた じかん')+'</span><div class="zbar h" style="width:'+((sp.hw-5)*24).toFixed(0)+'px"><span>'+T(fmtH(sp.hw))+'</span></div></div></div>'+
         zGauge(sp.hw-sp.sw)+
         '<div class="seechip">👀 '+T('ねた じかんの きろくも たまると、すいみんの バーが 出るよ。')+'</div></div>'
-      : '<div class="modeval">'+T('せんしゅうの きろくが たまると ここに 出るよ')+'</div>'+
-        '<div class="seechip">👀 '+T('つぎの日が がっこうの よると 休みの よるで、すいみんの ずれを くらべる ばしょだよ。げつようびに あたらしく なるよ')+'</div></div>';
+      : '<div class="modeval">'+T('がっこうの日と 休みの日の きろくが たまると ここに 出るよ')+'</div>'+
+        '<div class="seechip">👀 '+T('つぎの日が がっこうの日と 休みの日で、すいみんの ずれを くらべる ばしょだよ')+'</div></div>';
     const g=S.goals[mon];
     const psc=score(prevMon);
     const prevHas=weekDates(prevMon).some(d=>completed(d,'m')||completed(d,'k'));
@@ -1385,32 +1415,40 @@
       '<div style="font-size:12px;margin-top:4px">「めあて」がめんで えらんでね</div></div>';
     if(g){ const gd=GOALS.find(x=>x.code===g.code); const got=gd.judge(mon);
       g.achieved = gd.gapGoal ? gapOK(mon)===true : (got!=null&&got>=g.target); save();
-      const meter=gd.gapGoal?'':Array.from({length:Math.max(g.target,got||0)},(_,i)=>'<div class="m'+(i<got?' got':'')+'">'+(i<got?'⭐':'')+'</div>').join('');
+      /* どの日に たっせいできたかを 日付つきで見せる(できなかった日は空白) */
+      const ti2=iso(today());
+      const dayStrip=(!gd.gapGoal&&gd.dayOK)
+        ? '<div class="gdays">'+ds.map(d=>{
+            const x=fromIso(d), fut=d>ti2, ok=!fut&&gd.dayOK(d);
+            return '<div class="gd'+(ok?' on':'')+'"><i>'+(ok?'⭐':'')+'</i>'+
+              '<em>'+(x.getMonth()+1)+'/'+x.getDate()+'</em><u>'+DOW1[x.getDay()]+'</u></div>';
+          }).join('')+'</div>'
+        : '';
       goalHtml='<div class="goalcard"><b>🎯 こんしゅうの めあて:'+gd.label+(gd.gapGoal?'':'(週'+g.target+'日)')+'</b>'+
         '<div style="font-size:11px;margin-top:2px">🗓 こんしゅう = '+weekRangeLabel(mon)+'</div>'+
-        (meter?'<div class="meter">'+meter+'</div>':'')+
+        dayStrip+
         '<div style="font-size:13px;margin-top:6px">'+(g.achieved?'たっせい 🎉':(gd.gapGoal?'こんしゅうの きろくで はんてい するよ':'いま '+(got||0)+'日/'+g.target+'日'))+'</div></div>'; }
     app.innerHTML=
       '<h2>わたしの 1しゅうかん 📊</h2><div class="date">🗓 '+weekRangeLabel(mon)+'</div>'+seg+
       '<h3>🌙 ねた じかん</h3><div class="card">'+
       (bedMode?'<div class="modeval">いちばん おおかったのは <b>'+bedMode+'</b></div>':'<div class="modeval">まだ きろくが ないよ</div>')+
-      dayChart(bed,v=>(v-19)*24,hd,(21-19)*24,'めあて 9じ',[['9じ',48],['10じ',72],['11じ',96]])+
+      dayChart(bed,v=>(v-19)*24,hd,(21-19)*24,'めあて 9じ',[['9じ',48],['10じ',72],['11じ',96]],ds)+
       '<div class="seechip">👀 ぼうが たかい日は、ねるのが おそかった日。まいにち そろっているかな？</div></div>'+
       '<h3>☀️ おきた じかん</h3><div class="card">'+
-      dayChart(wake,v=>(v-5)*24,(v,i)=>'wk2'+(i>=5?' hd':''),null,null,[['6じ',24],['7じ',48],['8じ',72],['9じ',96]])+
+      dayChart(wake,v=>(v-5)*24,(v,i)=>'wk2'+(i>=5?' hd':''),null,null,[['6じ',24],['7じ',48],['8じ',72],['9じ',96]],ds)+
       '<div class="seechip">👀 いろの うすい ぼう(休みの日)だけ たかく なっていないかな？</div></div>'+
       '<h3>⏳ ねていた ながさ</h3><div class="card">'+
-      dayChart(dur,v=>Math.max(4,(v-6)*18),v=>v>=9?'good':'',54,'めやす 9じかん',[['8じかん',36],['10じかん',72]])+
+      dayChart(dur,v=>Math.max(4,(v-6)*18),v=>v>=9?'good':'',54,'めやす 9じかん',[['8じかん',36],['10じかん',72]],ds)+
       '<div class="seechip">👀 めやすは 9〜12じかん。みどりの ぼうは めやすに とどいた日。</div></div>'+
       '<h3>🔄 休みの日との ずれ</h3><div class="card">'+zureHtml+
       '<h3>🎮 あそびの ゲーム・どうがの じかん</h3><div class="card">'+
-      dayChart(stv,v=>v*16+4,v=>v>=4?'over':'good',3*16+4,'めやす 2じかん',[['1じかん',36],['2じかん',52],['3じかん',68]])+
+      dayChart(stv,v=>v*16+4,v=>v>=4?'over':'good',3*16+4,'めやす 2じかん',[['1じかん',36],['2じかん',52],['3じかん',68]],ds)+
       '<div class="legend"><span class="lg-good">🟢 めやすの なか</span><span class="lg-bad">🔴 めやすを オーバー</span></div></div>'+
       '<h3>💪 あそんだ日と てんき</h3><div class="card"><div class="wgrid">'+
       '<span class="lab">てんき</span>'+ds.map((d,i)=>'<span class="wx" id="wx'+i+'">'+wxEmoji(S.weather[d])+'</span>').join('')+
       '<span class="lab">そとで あそんだ日</span>'+soto.map(v=>'<span class="st'+(v?'':' no')+'">'+(v==null?'・':'⭐')+'</span>').join('')+
       '<span class="lab">からだを うごかす あそびや うんどうを した日</span>'+mv.map(v=>'<span class="st'+(v?'':' no')+'">'+(v==null?'・':'⭐')+'</span>').join('')+
-      '<span class="lab"></span>'+['げつ','か','すい','もく','きん','ど','にち'].map((d,i)=>'<span class="dy'+(i>=5?' hd':'')+'">'+d+'</span>').join('')+
+      '<span class="lab"></span>'+['げつ','か','すい','もく','きん','ど','にち'].map((d,i)=>{const x=fromIso(ds[i]);return '<span class="dy'+(i>=5?' hd':'')+'">'+d+'<em>'+(x.getMonth()+1)+'/'+x.getDate()+'</em></span>';}).join('')+
       '</div><div class="seechip">👀 あめの日に そとで あそべなくても、なかで からだを うごかせたら ⭐！</div></div>'+
       '<h3>🏆 せんしゅうの けっか('+prange+')</h3>'+
       (prevHas?
