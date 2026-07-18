@@ -1,0 +1,50 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>まいにち きろく - URL一覧</title>
+<style>
+  body{ margin:0; background:#f4f3ef; color:#33312a;
+    font-family:"BIZ UDPGothic","Hiragino Maru Gothic ProN","Yu Gothic UI","Meiryo",sans-serif; line-height:1.7; }
+  .wrap{ max-width:520px; margin:0 auto; padding:20px 16px 40px; }
+  h1{ font-size:20px; margin:8px 0 2px; }
+  .sub{ font-size:12px; color:#6b675c; margin-bottom:16px; }
+  h2{ font-size:15px; margin:20px 0 8px; padding-left:4px; border-left:5px solid #4f9d45; }
+  h2.p{ border-color:#e8940f; } h2.t{ border-color:#2e8fc4; }
+  .row{ display:flex; gap:8px; margin-bottom:8px; }
+  a.link{ flex:1; display:block; background:#fff; border:1.5px solid #ddd8ca; border-radius:12px;
+    padding:12px 14px; text-decoration:none; color:#33312a; font-weight:700; font-size:15px; }
+  a.link small{ display:block; font-weight:400; font-size:10.5px; color:#8d887a; word-break:break-all; }
+  a.link:active{ background:#f0ede4; }
+  button.cp{ flex:none; width:64px; border:1.5px solid #ddd8ca; border-radius:12px; background:#fff;
+    font:inherit; font-size:12px; cursor:pointer; color:#6b675c; }
+  button.cp:active{ background:#e2f2d9; }
+  .note{ font-size:11.5px; color:#6b675c; margin-top:4px; }
+</style>
+<div class="wrap">
+  <h1>📚 まいにち きろく - URL一覧</h1>
+  <div class="sub">このページをブックマークしておくと便利です。「コピー」でURLをコピーできます。</div>
+
+  <h2>🧒 子ども用(学年別)</h2>
+  <div class="row"><a class="link" href="./#g1">1年生<small>https://kkeisuke-ux.github.io/kiroku-app/#g1</small></a><button class="cp" data-u="https://kkeisuke-ux.github.io/kiroku-app/#g1">コピー</button></div>
+  <div class="row"><a class="link" href="./#g23">2〜3年生<small>https://kkeisuke-ux.github.io/kiroku-app/#g23</small></a><button class="cp" data-u="https://kkeisuke-ux.github.io/kiroku-app/#g23">コピー</button></div>
+  <div class="row"><a class="link" href="./#g46">4〜6年生<small>https://kkeisuke-ux.github.io/kiroku-app/#g46</small></a><button class="cp" data-u="https://kkeisuke-ux.github.io/kiroku-app/#g46">コピー</button></div>
+  <div class="note">初回は なまえ+じぶんの番号 でセットアップ。ホーム画面への追加を推奨。</div>
+
+  <h2 class="p">👨‍👩‍👧 保護者用(おうちの人向けレポート)</h2>
+  <div class="row"><a class="link" href="./#g1?report">1年生の保護者<small>https://kkeisuke-ux.github.io/kiroku-app/#g1?report</small></a><button class="cp" data-u="https://kkeisuke-ux.github.io/kiroku-app/#g1?report">コピー</button></div>
+  <div class="row"><a class="link" href="./#g23?report">2〜3年生の保護者<small>https://kkeisuke-ux.github.io/kiroku-app/#g23?report</small></a><button class="cp" data-u="https://kkeisuke-ux.github.io/kiroku-app/#g23?report">コピー</button></div>
+  <div class="row"><a class="link" href="./#g46?report">4〜6年生の保護者<small>https://kkeisuke-ux.github.io/kiroku-app/#g46?report</small></a><button class="cp" data-u="https://kkeisuke-ux.github.io/kiroku-app/#g46?report">コピー</button></div>
+  <div class="note">※お子さんが記録している端末で開いてください(データは端末内にあるため)。学年もお子さんと同じものを。</div>
+
+  <h2 class="t">🏫 先生用(クラス一覧ダッシュボード)</h2>
+  <div class="row"><a class="link" href="./teacher.html">先生向けダッシュボード<small>https://kkeisuke-ux.github.io/kiroku-app/teacher.html</small></a><button class="cp" data-u="https://kkeisuke-ux.github.io/kiroku-app/teacher.html">コピー</button></div>
+  <div class="note">※開くには研究者用トークンが必要です(研究者から受け取ってください)。</div>
+</div>
+<script>
+  document.querySelectorAll('button.cp').forEach(function(b){
+    b.onclick=function(){
+      navigator.clipboard.writeText(b.getAttribute('data-u')).then(function(){
+        b.textContent='OK!'; setTimeout(function(){ b.textContent='コピー'; },1200);
+      }).catch(function(){ prompt('このURLをコピーしてください', b.getAttribute('data-u')); });
+    };
+  });
+</script>
