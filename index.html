@@ -211,7 +211,7 @@
   .zbar span{ position:absolute; right:-44px; top:-2px; font-size:12px; font-weight:700; }
   /* 睡眠バー(就寝→起床の帯を時間軸に並べ、学校前夜と休み前夜のずれを見る) */
   .sblab{ font-size:11.5px; color:#6b675c; margin:8px 0 2px; font-weight:700; }
-  .sbtrack{ position:relative; height:28px; background:#f1efe8; border-radius:8px; overflow:hidden; }
+  .sbtrack{ position:relative; height:28px; background:#f1efe8; border-radius:8px; }
   .sbtrack .tick{ position:absolute; top:0; bottom:0; width:1px; background:#dcd8cc; }
   .sbbar{ position:absolute; top:3px; bottom:3px; border-radius:7px; background:var(--night);
     display:flex; align-items:center; justify-content:space-between; padding:0 6px;
@@ -219,6 +219,8 @@
   .sbbar.h{ background:#e8940f; }
   .sbaxis{ position:relative; height:15px; font-size:9.5px; color:#8d887a; margin-top:2px; }
   .sbaxis span{ position:absolute; transform:translateX(-50%); }
+  .sbmid{ position:absolute; top:-3px; transform:translateX(-50%); font-size:11px; color:#c2410c;
+    font-weight:700; text-shadow:0 0 2px #fff; z-index:2; }
   .scorecard{ background:linear-gradient(135deg,#f1f7ec,#e2f0d8); border:2px solid #cfe3c2;
     border-radius:18px; padding:14px; margin-top:14px; display:flex; gap:14px; align-items:center; }
   .scorecard .pt{ font-size:36px; font-weight:700; color:#3f7a34; line-height:1; }
@@ -734,20 +736,28 @@
     if(p===0||p===2||k1===0||k2===0) c++; }); return c; }
   function moveDay(d){ return ans(d,'M5')===0; }
   const avg=x=>x.reduce((a,b)=>a+b,0)/x.length;
-  function med(v){ if(!v.length) return null; const s=v.slice().sort((a,b)=>a-b);
-    const m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2; }
-  /* 「つぎの日」が学校か休みかで夜を分類し、就寝・起床それぞれの中央値を返す。
-     朝の記録(対象日D)の就寝=前夜、起床=当日朝なので、Dが学校日かどうかが
-     そのまま「その夜の翌日が学校か休みか」の分類になる */
+  /* 「つぎの日」が学校か休みかで夜を分類する。朝の記録(対象日D)の就寝=前夜、
+     起床=当日朝なので、Dが学校日かどうかが「その夜の翌日が学校か休みか」になる。
+     sb/hb=就寝の平均, sw/hw=起床の平均(バー表示用)。
+     ms/mh=睡眠中央時刻(就寝と起床のまんなか=1夜ワンセットで計算)の平均。
+     「ずれ」(社会的ジェットラグ)は中央時刻どうしの差 mh-ms で評価する
+     (就寝・起床が両方そろった夜だけで計算) */
   function sleepPair(dates){
-    let sb=[],hb=[],sw=[],hw=[];
+    let sb=[],hb=[],sw=[],hw=[],ms=[],mh=[];
+    const avg0=v=>v.length?avg(v):null;
     dates.forEach(d=>{ const sch=isSchool(fromIso(d));
-      const b=ans(d,'M2'); if(b!=null&&b!=='DK') (sch?sb:hb).push(BED_H[b]);
-      const w=ans(d,'M3'); if(w!=null&&w!=='DK') (sch?sw:hw).push(WAKE_H[w]);
-      const h=ans(d,'M3H'); if(h!=null&&h!=='DK') hw.push(WAKE_H[h]); });
-    return {sb:med(sb), hb:med(hb), sw:med(sw), hw:med(hw)};
+      const b=ans(d,'M2'), w=ans(d,'M3'), h=ans(d,'M3H');
+      const bv=(b!=null&&b!=='DK')?BED_H[b]:null;
+      const wv=(w!=null&&w!=='DK')?WAKE_H[w]:null;
+      if(bv!=null) (sch?sb:hb).push(bv);
+      if(wv!=null) (sch?sw:hw).push(wv);
+      if(h!=null&&h!=='DK') hw.push(WAKE_H[h]);
+      const wp=(wv!=null)?wv:((h!=null&&h!=='DK')?WAKE_H[h]:null);
+      if(bv!=null&&wp!=null) (sch?ms:mh).push((bv+wp+24)/2);
+    });
+    return {sb:avg0(sb), hb:avg0(hb), sw:avg0(sw), hw:avg0(hw), ms:avg0(ms), mh:avg0(mh)};
   }
-  function gapVal(dates){ const p=sleepPair(dates); return (p.sw==null||p.hw==null)?null:Math.abs(p.hw-p.sw); }
+  function gapVal(dates){ const p=sleepPair(dates); return (p.ms==null||p.mh==null)?null:Math.abs(p.mh-p.ms); }
   function gapOK(mon){ const g=gapVal(weekDates(mon)); return g==null?null:g<=1; }
 
   /* ---- 期間集計(週・月共通。日付リストを渡す) ---- */
@@ -1304,28 +1314,33 @@
     const fmtE=h=>fmtH(h-12);   /* 20.5→「8じはん」(よる) */
     const TICKS=[[20,'よる8じ'],[22,'よる10じ'],[24,'よる12じ'],[30,'あさ6じ'],[32,'あさ8じ'],[34,'あさ10じ']];
     const tickLines=TICKS.map(t=>'<div class="tick" style="left:'+sbPos(t[0]).toFixed(1)+'%"></div>').join('');
-    const sbRow=(lab,b,w,cls)=>{
+    const sbRow=(lab,b,w,mid,cls)=>{
       const L=sbPos(b), W=sbPos(w+24)-L;
       return '<div class="sblab">'+lab+'</div>'+
         '<div class="sbtrack">'+tickLines+
         '<div class="sbbar'+cls+'" style="left:'+L.toFixed(1)+'%;width:'+W.toFixed(1)+'%">'+
-        '<span>🌙'+T(fmtE(b))+'</span><span>☀️'+T(fmtH(w))+'</span></div></div>';
+        '<span>🌙'+T(fmtE(b))+'</span><span>☀️'+T(fmtH(w))+'</span></div>'+
+        (mid!=null?'<span class="sbmid" style="left:'+sbPos(mid).toFixed(1)+'%">▽</span>':'')+
+        '</div>';
     };
     const sbAxis='<div class="sbaxis">'+TICKS.map(t=>'<span style="left:'+sbPos(t[0]).toFixed(1)+'%">'+T(t[1])+'</span>').join('')+'</div>';
-    const zsgn=g=>{ const a=Math.abs(Math.round(g*10)/10);
-      return a===0?'<b>おなじ</b>':'<b>'+a+'じかん '+(g>0?'おそい':'はやい')+'</b>'; };
-    const haveAll=sp.sb!=null&&sp.sw!=null&&sp.hb!=null&&sp.hw!=null;
+    /* すいみんじかんのずれ=睡眠中央時刻の差を「◯じかん◯ぷん」で表示 */
+    const fmtHM=g=>{ const m=Math.round(Math.abs(g)*60);
+      if(m<15) return '<b>ほとんど おなじ</b>';
+      const hh=Math.floor(m/60), mm=m%60;
+      return '<b>'+(hh?hh+T('じかん'):'')+(mm?mm+T('ぷん'):'')+'</b>'+T(g>0?' おそい':' はやい'); };
+    const haveAll=sp.sb!=null&&sp.sw!=null&&sp.hb!=null&&sp.hw!=null&&sp.ms!=null&&sp.mh!=null;
     const zureHtml= haveAll
-      ? sbRow(T('🏫 つぎの日が がっこうの よる'),sp.sb,sp.sw,'')+
-        sbRow(T('🏖 つぎの日が 休みの よる'),sp.hb,sp.hw,' h')+
+      ? sbRow(T('🏫 つぎの日が がっこうの よる'),sp.sb,sp.sw,sp.ms,'')+
+        sbRow(T('🏖 つぎの日が 休みの よる'),sp.hb,sp.hw,sp.mh,' h')+
         sbAxis+
-        '<div class="modeval" style="margin-top:8px">'+T('休みの まえは、ねるのが ')+zsgn(sp.hb-sp.sb)+T('、おきるのが ')+zsgn(sp.hw-sp.sw)+'</div>'+
-        '<div class="seechip">👀 '+T('2本の ぼうが そろっているほど、からだの リズムが ととのっているよ(ずれ1じかんまでが めやす)')+'</div></div>'
+        '<div class="modeval" style="margin-top:8px">'+T('すいみんじかんの ずれ:')+' '+fmtHM(sp.mh-sp.ms)+'</div>'+
+        '<div class="seechip">👀 '+T('▽は すいみんの「まんなかの じこく」。2つの ▽が そろっているほど からだの リズムが ととのっているよ(ずれ 1じかんまでが めやす)')+'</div></div>'
       : (sp.sw!=null&&sp.hw!=null)
       ? '<div class="zure">'+
         '<div class="zrow"><span class="zlab">'+T('がっこうの日に おきた じかん')+'</span><div class="zbar" style="width:'+((sp.sw-5)*24).toFixed(0)+'px"><span>'+T(fmtH(sp.sw))+'</span></div></div>'+
         '<div class="zrow"><span class="zlab">'+T('休みの日に おきた じかん')+'</span><div class="zbar h" style="width:'+((sp.hw-5)*24).toFixed(0)+'px"><span>'+T(fmtH(sp.hw))+'</span></div></div></div>'+
-        '<div class="modeval" style="margin-top:8px">'+T('ずれは やく ')+'<b>'+(Math.round(zg*10)/10)+T('じかん')+'</b></div>'+
+        '<div class="modeval" style="margin-top:8px">'+T('おきた じかんの ずれ:')+' '+fmtHM(sp.hw-sp.sw)+'</div>'+
         '<div class="seechip">👀 '+T('ずれが 1じかんまでだと、からだの リズムが ととのうよ。')+'</div></div>'
       : '<div class="modeval">'+T('休みの日の きろくが たまると ここに 出るよ')+'</div>'+
         '<div class="seechip">👀 '+T('つぎの日が がっこうの よると 休みの よるで、ねた・おきた じかんの ずれを くらべる ばしょだよ。')+'</div></div>';
