@@ -664,19 +664,21 @@
   }
   function giveStar(){  /* もっているスターを1こ いまのバディに あげる */
     if(S.stars<1) return false;
+    if(nextStarNeed(S.buddy)===0) return false;   /* さいだいレベル:スターを むだづかいさせない */
     const before=buddyStage(); S.stars--; S.care[S.buddy]=(S.care[S.buddy]||0)+1;
     ev({t:'givestar',id:S.buddy}); save();
     return {leveledUp: buddyStage()>before};
   }
   function gachaPull(){
     if(S.coins<GACHA_COST) return null;
-    S.coins-=GACHA_COST; ev({t:'gacha'});
     const locked=CHARS.filter(c=>!S.owned.includes(c.id));
-    const win = locked.length>0 && Math.random()<GACHA_WIN;
+    if(!locked.length) return {isNew:false, allOwned:true, back:0};   /* 全員なかま:コインは つかわない */
+    S.coins-=GACHA_COST; ev({t:'gacha'});
+    const win = Math.random()<GACHA_WIN;
     if(win){ const g=locked[Math.floor(Math.random()*locked.length)];
       S.owned.push(g.id); S.care[g.id]=S.care[g.id]||0; ev({t:'gachawin',id:g.id}); save(); return {id:g.id,isNew:true}; }
     /* はずれ:半分もどる(コインの勉強:あたらない時もある) */
-    const back=Math.floor(GACHA_COST/2); S.coins+=back; save(); return {isNew:false,back:back,allOwned:locked.length===0};
+    const back=Math.floor(GACHA_COST/2); S.coins+=back; save(); return {isNew:false,back:back};
   }
 
   function asaFlow(dow,holiday,extra){
@@ -1118,9 +1120,9 @@
         '<div class="btxt"><b>'+charDef(S.buddy).name+' <span style="font-size:11px;color:#4f7d3f">Lv.'+(bs+1)+'</span></b>'+
         '<div style="font-size:12px;color:#4f7d3f">きろくすると そだつよ！</div></div></div>'
       : '<div class="buddybox" id="tapbuddy" style="cursor:pointer"><div class="bchar">'+charVisual(S.buddy,bs,54)+'</div>'+
-        '<div class="btxt"><b>'+charDef(S.buddy).name+' <span style="font-size:11px;color:#4f7d3f">Lv.'+(bs+1)+'</span></b>'+
+        '<div class="btxt"><b>'+charDef(S.buddy).name+' <span style="font-size:11px;color:#4f7d3f">Lv.'+(bs+1)+(isMax?' <b style="color:#c2410c">MAX</b>':'')+'</span></b>'+
         '<span class="bstars">⭐ '+have+'こ あげた</span>'+
-        '<div style="font-size:11px;color:#4f7d3f">'+(isMax?'さいだいまで そだったよ！':'あと ⭐'+need+'こで レベルアップ')+'</div>'+
+        '<div style="font-size:11px;color:#4f7d3f">'+(isMax?'🏆 さいだいまで そだったよ！ほかの子も そだてられるよ':'あと ⭐'+need+'こで レベルアップ')+'</div>'+
         '<div style="font-size:11px;color:#2e7bb0;font-weight:700;margin-top:2px">👆 タップして スターを あげる</div></div></div>';
     /* コイン＋スター残高＋「スターをあげる」ボタン(1年生は無し) */
     const coinbar= G1 ? '' :
@@ -1179,9 +1181,14 @@
     document.getElementById('shstar').textContent=S.stars;
     const ch=document.getElementById('shchar'); ch.innerHTML=charVisual(S.buddy,bs,60);
     document.getElementById('shprog').innerHTML= levelMsg
-      ? '🎉 レベルアップ！ Lv.'+(bs+1)+' に なったよ！'
-      : 'Lv.'+(bs+1)+'／⭐ '+have+'こ あげた／'+(max?'さいだいレベル！':'あと ⭐'+need+'こで レベルアップ');
-    const gv=document.getElementById('give'); gv.disabled=S.stars<1; gv.style.opacity=S.stars<1?.4:1;
+      ? '🎉 レベルアップ！ Lv.'+(bs+1)+' に なったよ！'+(max?'<br>🏆 さいだいレベルまで そだったよ！':'')
+      : 'Lv.'+(bs+1)+(max?' <b style="color:#c2410c">MAX</b>':'')+'／⭐ '+have+'こ あげた／'+(max?'🏆 さいだいレベル！':'あと ⭐'+need+'こで レベルアップ');
+    /* さいだいレベルの子には あげられない(スターの むだづかい防止)。ほかの子へ誘導 */
+    const gv=document.getElementById('give'), canGive=S.stars>=1 && !max;
+    gv.disabled=!canGive; gv.style.opacity=canGive?1:.4;
+    document.getElementById('givenote').textContent= max
+      ? 'この子は さいだいまで そだったよ！👥「なかまを 見る」から ほかの子を えらんで そだてよう'
+      : 'もっている スターを あげると なかまが レベルアップ！';
     const by=document.getElementById('buystar'); by.disabled=S.coins<STAR_COST; by.style.opacity=S.coins<STAR_COST?.4:1;
     const tg=document.getElementById('togacha'); tg.disabled=S.coins<GACHA_COST; tg.style.opacity=S.coins<GACHA_COST?.4:1;
   }
@@ -1196,7 +1203,7 @@
       '<div style="font-weight:700;margin-top:2px">'+charDef(S.buddy).name+'</div>'+
       '<div id="shprog" style="font-size:12px;color:#6b675c;margin:4px 0"></div>'+
       '<button class="feedbtn" id="give">⭐ スターを あげる</button>'+
-      '<div class="a-note">もっている スターを あげると なかまが レベルアップ！</div></div>'+
+      '<div class="a-note" id="givenote">もっている スターを あげると なかまが レベルアップ！</div></div>'+
       '<div class="a-sec" style="text-align:center;position:relative"><h4>🪙 コインで スターを かう</h4>'+
       '<button class="a-cta" id="buystar">⭐ スターを 1こ かう('+STAR_COST+'コイン)</button>'+
       '<div id="buymsg" style="min-height:20px;font-size:12.5px;font-weight:700;color:#c2410c;margin-top:4px"></div></div>'+
@@ -1239,6 +1246,20 @@
 
   /* ============ ガチャ画面 ============ */
   function renderGacha(){
+    const allOwned=CHARS.every(c=>S.owned.includes(c.id));
+    if(allOwned){   /* コンプリート:まわせない(コインを むだづかいさせない)。お祝いとして表示 */
+      app.innerHTML='<div class="adult" style="text-align:center">'+
+        '<h2>🎁 ガチャ</h2>'+
+        '<div id="gresult" style="min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center">'+
+        '<div style="font-size:44px">🎉</div>'+
+        '<div style="font-size:16px;font-weight:700;color:var(--meate);margin-top:6px">コンプリート！<br>'+CHARS.length+'にんの なかまが ぜんいん そろったよ！</div>'+
+        '<div style="font-size:12px;color:#8d887a;margin-top:8px">スターを あげて、みんなを さいだいレベルまで そだてよう</div></div>'+
+        '<button class="minibtn" id="tonk" style="margin-top:8px">👥 なかまを 見る</button>'+
+        '<button class="a-cta gray" id="back" style="margin-top:14px">← もどる</button></div>';
+      document.getElementById('back').onclick=()=>go('shop');
+      document.getElementById('tonk').onclick=()=>go('nakama');
+      return;
+    }
     const can=S.coins>=GACHA_COST;
     app.innerHTML='<div class="adult" style="text-align:center">'+
       '<h2>🎁 ガチャ</h2>'+
@@ -1264,7 +1285,7 @@
             '<div style="font-size:16px;font-weight:700;margin-top:6px;color:var(--meate)">✨ あたり！ '+c.name+' が なかまに なった！</div>'+
             '<button class="minibtn" id="setb" style="margin-top:8px">この子を そだてる</button>';
           document.getElementById('setb').onclick=()=>{ S.buddy=res.id; ev({t:'buddy',id:res.id}); save(); go('home'); };
-        } else if(res.allOwned){ box.innerHTML='<div style="font-size:15px">🎉 みんな なかまに いるよ！<br>コインが '+res.back+' もどってきたよ 🪙</div>';
+        } else if(res.allOwned){ box.innerHTML='<div style="font-size:15px">🎉 みんな なかまに いるよ！<br>コインは つかわなかったよ 🪙</div>';
         } else { box.innerHTML='<div style="font-size:40px">💧</div><div style="font-size:15px">ざんねん…はずれ！<br>コインが '+res.back+' もどってきたよ 🪙</div>'; }
         document.getElementById('gcoin').textContent=S.coins+' コイン';
         const can2=S.coins>=GACHA_COST;
@@ -1281,7 +1302,7 @@
       return '<button class="nkcell'+(sel?' sel':'')+(owned?'':' lock')+'" data-n="'+c.id+'" '+(owned?'':'disabled')+'>'+
         '<div class="nkv">'+(owned?charVisual(c.id,stg,40):'<span style="font-size:36px">❓</span>')+'</div>'+
         '<div class="nkn">'+(owned?c.name:'？？？')+'</div>'+
-        (owned?('<div class="nkstg">'+(sel?'そだて中 ⭐':'Lv.'+(stg+1))+'</div>'):'')+'</button>';
+        (owned?('<div class="nkstg">'+(sel?'そだて中 ⭐':'Lv.'+(stg+1))+(stg>=4?' 🏆MAX':'')+'</div>'):'')+'</button>';
     }).join('');
     app.innerHTML='<div class="adult"><h2>👥 なかま ('+S.owned.length+'/'+CHARS.length+')</h2>'+
       '<div style="font-size:12px;color:#8d887a;margin-bottom:8px">そだてたい子を えらんでね。きろくすると えらんだ子が そだつよ。あたらしい子は 🎁ガチャで あえるよ。</div>'+
@@ -1678,6 +1699,8 @@
       if(!a||!b){ alert('開始日と終了日を選んでください'); return; }
       if(a>b){ alert('開始日が終了日より後になっています'); return; }
       S.breaks=S.breaks||[]; S.breaks.push({a:a,b:b});
+      /* 期間内の過去の単日切替を消す(残っていると切替が優先されて学校日の画面が出る) */
+      Object.keys(S.overrides).forEach(d=>{ if(d>=a&&d<=b) delete S.overrides[d]; });
       ev({t:'break',op:'add',a:a,b:b}); syncNow();   /* イベント化してサーバのスナップショットにも即反映 */
       go('data'); };
     (S.breaks||[]).forEach((b,i)=>{ const el=document.getElementById('bkdel'+i);
@@ -1823,6 +1846,9 @@
       if(!a||!b){ document.getElementById('bkmsg').textContent=T('「いつから」と「いつまで」を えらんでね'); return; }
       if(a>b){ document.getElementById('bkmsg').textContent=T('「いつから」が「いつまで」より あとに なっているよ'); return; }
       S.breaks=S.breaks||[]; S.breaks.push({a:a,b:b});
+      /* 期間内の過去の単日切替(がっこうの日モード等)を消す。残っていると
+         切替が優先されて、休み期間なのに学校日の画面が出てしまう */
+      Object.keys(S.overrides).forEach(d=>{ if(d>=a&&d<=b) delete S.overrides[d]; });
       ev({t:'break',op:'add',a:a,b:b}); syncNow();   /* イベント化してサーバのスナップショットにも即反映 */
       go('breaks'); };
     (S.breaks||[]).forEach((b,i)=>{ const el=document.getElementById('bkx'+i);
