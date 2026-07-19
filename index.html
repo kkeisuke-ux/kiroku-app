@@ -276,6 +276,11 @@
   .pl .pg{ color:#2c6e1f; font-weight:700; } .pl .pr{ color:#b34a38; font-weight:700; }
   .avgline{ font-size:12px; margin:2px 0 4px; }
   .avgline b{ font-size:13px; }
+  /* 学校の日/休みの日の2行表示(ラベル列と値列のインデントをそろえる) */
+  .avg2{ display:grid; grid-template-columns:max-content max-content; column-gap:12px; row-gap:1px;
+    font-size:12px; margin:2px 0 8px; align-items:baseline; }
+  .avg2 b{ font-size:13.5px; font-variant-numeric:tabular-nums; }
+  .avg2 .an{ grid-column:1/3; font-size:10px; color:#8d887a; }
 
   .goalopts{ display:flex; flex-direction:column; gap:10px; }
   .goalopt{ display:flex; gap:12px; align-items:center; text-align:left; background:#fff;
@@ -387,10 +392,11 @@
         d.owned=d.owned||['flower']; d.buddy=d.buddy||'flower';
         d.care=d.care||{flower:0}; d.coins=(d.coins!=null?d.coins:0);
         d.stars=(typeof d.stars==='number'?d.stars:(d.starsHeld!=null?d.starsHeld:0));  /* もっているスター(財布)。読み込みで0に戻さない */
+        d.bonus=d.bonus||{};   /* 週ボーナスの付与記録(週の月曜→コイン数) */
         return d; } }catch(e){}
     return {name:'', setup:false, events:[], goals:{}, overrides:{}, breaks:[],
       server:{url:'',token:'',child:''}, weather:{}, region:{lat:35.17,lon:136.91}, pin:'1122',
-      owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0};
+      owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0, bonus:{}};
   }
   function save(){ localStorage.setItem(KEY, JSON.stringify(S)); idbSave(); }
 
@@ -455,7 +461,7 @@
   function snapState(){
     /* サーバに置く復元用スナップショット。なまえ・パスコードは端末外に出さない */
     return {setup:S.setup, goals:S.goals, overrides:S.overrides, breaks:S.breaks||[], owned:S.owned, buddy:S.buddy,
-      care:S.care, coins:S.coins, stars:S.stars, region:S.region, g:GRADE, at:nowIso()};
+      care:S.care, coins:S.coins, stars:S.stars, bonus:S.bonus||{}, region:S.region, g:GRADE, at:nowIso()};
   }
   async function syncNow(){
     const url=S.server.url||SYNC_DEFAULT.url, token=S.server.token||SYNC_DEFAULT.token;
@@ -565,9 +571,9 @@
       events:evs.map(e=>{ e.sy=1; return fixD(e); }),
       goals:{}, overrides:{}, breaks:[], server:{url:url, token:token, child:code},
       weather:cur.weather||{}, region:cur.region||{lat:35.17,lon:136.91}, pin:cur.pin||'1122',
-      owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0};
+      owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0, bonus:{}};
     const sp=j.snap;
-    if(sp){ ['goals','overrides','breaks','owned','buddy','care','coins','stars','region'].forEach(k=>{
+    if(sp){ ['goals','overrides','breaks','owned','buddy','care','coins','stars','bonus','region'].forEach(k=>{
       if(sp[k]!=null) S[k]=sp[k]; }); }
     save(); return null;
   }
@@ -649,6 +655,10 @@
      ・スターを なかまに あげる(スター1こ → いまの子が レベルに近づく)
      ・ガチャ = GACHA_COST コイン、あたると 新しいなかま、はずれもある */
   const COIN_PER_REC=10, STAR_COST=10, GACHA_COST=40, GACHA_WIN=0.6;
+  /* ボーナスコイン:めあて達成=30コイン(週1回)、せんしゅうの けっか=点数に応じて
+     80点〜:50 / 50点〜:30 / それ以下(記録あり):10(週が明けてから1回) */
+  const GOAL_BONUS=30;
+  function scoreBonusAmt(t){ return t>=80?50:(t>=50?30:10); }
   const STAGE_TH=[0,5,12,22,35];  /* あげたスター数→成長ステージ(0..4) */
   function stageOf(id){ const c=(S.care[id]||0); let s=0; STAGE_TH.forEach((t,i)=>{ if(c>=t) s=i; }); return s; }
   function buddyStage(){ return stageOf(S.buddy); }
@@ -891,6 +901,32 @@
     return {total:recPt+goalPt+lifePt, recPt, goalPt, lifePt, rec, N, done: tISO>=ds[6]};
   }
 
+  /* ====== ボーナスコインの付与(ホーム表示のたびに判定・各1回だけ) ====== */
+  let bonusNotes=[];
+  function checkRewards(){
+    if(G1) return;   /* 1年生はコインなし */
+    const mon=weekMonday(today());
+    /* めあて:こんしゅうの めあてを はじめて たっせいした とき */
+    const g=S.goals[mon];
+    if(g && !g.rewarded){
+      const gd=GOALS.find(x=>x.code===g.code);
+      const got=gd.judge(mon);
+      const ach= gd.gapGoal ? gapOK(mon)===true : (got!=null&&got>=g.target);
+      if(ach){ g.achieved=true; g.rewarded=true; S.coins+=GOAL_BONUS;
+        ev({t:'coin',n:GOAL_BONUS,why:'goal',week:mon});
+        bonusNotes.push('🎯 めあて たっせい！ ボーナス 🪙'+GOAL_BONUS+'コイン もらったよ！'); }
+    }
+    /* せんしゅうの けっか(月〜日の100点スコア):週が明けてから1回だけ */
+    const prevMon=weekMonday(addDays(fromIso(mon),-7));
+    S.bonus=S.bonus||{};
+    if(S.bonus[prevMon]==null && weekDates(prevMon).some(d=>completed(d,'m')||completed(d,'k'))){
+      const t=score(prevMon).total, amt=scoreBonusAmt(t);
+      S.bonus[prevMon]=amt; S.coins+=amt;
+      ev({t:'coin',n:amt,why:'week',week:prevMon,score:t});
+      bonusNotes.push('🏆 せんしゅうの けっか '+t+'てん！ ボーナス 🪙'+amt+'コイン もらったよ！');
+    }
+  }
+
   /* ============ 画面遷移 ============ */
   let scr={name:'home'}, flowState=null, dayShown=null;
   function go(name,arg){ scr={name,arg}; render(); }
@@ -1097,6 +1133,7 @@
   /* ============ ホーム ============ */
   function renderHome(){
     syncNow();   /* 未送信があれば裏で再送(設定時のみ) */
+    checkRewards();   /* めあて達成・せんしゅうの けっかの ボーナスコイン */
     const t=today(), ti=iso(t), p=pending();
     const greet=t.getHours()<11?'おはよう':'こんにちは';
     let big='';
@@ -1144,6 +1181,7 @@
       (restoredNote?'<div class="catchup">💾 きえていた きろくを バックアップから もとに もどしたよ！</div>':'')+
       (pwSetNote?'<div class="catchup">🔑 '+T('ばんごうを おぼえたよ！これで きろくは あんしんだよ')+'</div>':'')+
       (needPwBanner()?'<button class="catchup" id="go-pwset" style="width:100%;text-align:left;border:none;cursor:pointer">🔑 '+T('じぶんの ばんごうを きめてね(タップして せってい)')+'</button>':'')+
+      bonusNotes.map(n=>'<div class="catchup" style="background:#fdf3d8;border-color:#ecd88a;color:#8a6516">'+n+'</div>').join('')+
       coinbar+
       '<div class="bigbtns">'+big+goalBtn+'</div>'+catchHtml+
       subbtns+
@@ -1154,6 +1192,7 @@
     const pwb=document.getElementById('go-pwset'); if(pwb) pwb.onclick=()=>go('pwset');
     document.getElementById('go-breaks').onclick=()=>go('breaks');
     pwSetNote=false;   /* 完了メッセージは1回だけ表示 */
+    bonusNotes=[];     /* ボーナスのお知らせも1回だけ表示(コイン自体は付与済み) */
     document.getElementById('go-asa').onclick=()=>{
       const y=addDays(t,-1);
       /* 「きのう」の質問の言い回しは、きょうではなく「きのう」が学校日だったかで決める */
@@ -1401,7 +1440,16 @@
       if(p==null&&k1==null&&k2==null) return null; return (p===0||p===2||k1===0||k2===0)?1:0;});
     const mv=ds.map(d=>{const a=ans(d,'M5'); return a==null||a==='DK'?null:(a===0?1:0);});
     const hd=(v,i)=>i>=5?'hd':'';
-    const bedMode=modeSlotD(ds,'M2',BED);
+    const bedMode=modeSlotD(ds,'M2',BED), wakeMode=modeSlotD(ds,'M3',WAKE);
+    /* 学校の日/休みの日の値を、ラベル列をそろえた2行で表示する */
+    const avg2=(rows,note)=>'<div class="avg2">'+
+      rows.map(r=>'<span>'+r[0]+'</span><b>'+r[1]+'</b>').join('')+
+      (note?'<span class="an">'+note+'</span>':'')+'</div>';
+    /* 睡眠時間の平均(ぜんぶ/つぎの日が学校/休み)。dur[i]=ds[i]の朝に起きた夜の長さ */
+    const durS=[], durH=[];
+    ds.forEach((d,i)=>{ if(dur[i]!=null) (isSchool(fromIso(d))?durS:durH).push(dur[i]); });
+    const durAll=dur.filter(v=>v!=null);
+    const fmtDur=v=>(Math.round(v*10)/10)+T('じかん');
     const fmtH=h=>{ const hh=Math.floor(h), half=(h-hh)>=0.25&&(h-hh)<0.75; return hh+'じ'+(half?'はん':''); };
     /* ずれカードの対象週:こんしゅうのデータが揃い次第(学校前夜と休み前夜の両方)
        こんしゅうの途中経過を表示。揃うまでは、完成しているせんしゅうの結果を表示 */
@@ -1482,19 +1530,25 @@
       goalHtml='<div class="goalcard"><b>🎯 こんしゅうの めあて:'+gd.label+(gd.gapGoal?'':'(週'+g.target+'日)')+'</b>'+
         '<div style="font-size:11px;margin-top:2px">🗓 こんしゅう = '+weekRangeLabel(mon)+'</div>'+
         dayStrip+
-        '<div style="font-size:13px;margin-top:6px">'+(g.achieved?'たっせい 🎉':(gd.gapGoal?'こんしゅうの きろくで はんてい するよ':'いま '+(got||0)+'日/'+g.target+'日'))+'</div></div>'; }
+        '<div style="font-size:13px;margin-top:6px">'+(g.achieved?'たっせい 🎉'+(g.rewarded?' ボーナス 🪙'+GOAL_BONUS+'コイン ゲット！':''):(gd.gapGoal?'こんしゅうの きろくで はんてい するよ':'いま '+(got||0)+'日/'+g.target+'日')+'(たっせいで 🪙'+GOAL_BONUS+'コイン)')+'</div></div>'; }
     app.innerHTML=
       '<h2>わたしの 1しゅうかん 📊</h2><div class="date">🗓 '+weekRangeLabel(mon)+'</div>'+seg+
       '<h3>🌙 ねた じかん</h3><div class="card">'+
       (bedMode?'<div class="modeval">いちばん おおかったのは <b>'+bedMode+'</b></div>':'<div class="modeval">まだ きろくが ないよ</div>')+
-      '<div class="avgline">🏫 '+T('つぎの日が がっこうの日:')+' <b>'+(spNow.sb!=null?T(fmtE(spNow.sb)):'—')+'</b> ・ 🏖 '+T('休みの日:')+' <b>'+(spNow.hb!=null?T(fmtE(spNow.hb)):'—')+'</b> <span style="font-size:10px;color:#8d887a">'+T('(こんしゅうの へいきん)')+'</span></div>'+
+      avg2([['🏫 '+T('つぎの日が がっこうの日:'), spNow.sb!=null?T(fmtE(spNow.sb)):'—'],
+            ['🏖 '+T('つぎの日が 休みの日:'), spNow.hb!=null?T(fmtE(spNow.hb)):'—']], T('(こんしゅうの へいきん)'))+
       dayChart(bed,v=>(v-19)*24,hd,(21-19)*24,'めあて 9じ',[['9じ',48],['10じ',72],['11じ',96]],ds)+
       '<div class="seechip">👀 ぼうが たかい日は、ねるのが おそかった日。まいにち そろっているかな？</div></div>'+
       '<h3>☀️ おきた じかん</h3><div class="card">'+
-      '<div class="avgline">🏫 '+T('つぎの日が がっこうの日:')+' <b>'+(spNow.sw!=null?T(fmtH(spNow.sw)):'—')+'</b> ・ 🏖 '+T('休みの日:')+' <b>'+(spNow.hw!=null?T(fmtH(spNow.hw)):'—')+'</b> <span style="font-size:10px;color:#8d887a">'+T('(こんしゅうの へいきん)')+'</span></div>'+
+      (wakeMode?'<div class="modeval">いちばん おおかったのは <b>'+wakeMode+'</b></div>':'<div class="modeval">まだ きろくが ないよ</div>')+
+      avg2([['🏫 '+T('がっこうの日:'), spNow.sw!=null?T(fmtH(spNow.sw)):'—'],
+            ['🏖 '+T('休みの日:'), spNow.hw!=null?T(fmtH(spNow.hw)):'—']], T('(こんしゅうの へいきん)'))+
       dayChart(wake,v=>(v-5)*24,(v,i)=>'wk2'+(i>=5?' hd':''),null,null,[['6じ',24],['7じ',48],['8じ',72],['9じ',96]],ds)+
       '<div class="seechip">👀 いろの うすい ぼう(休みの日)だけ たかく なっていないかな？</div></div>'+
       '<h3>⏳ すいみんじかん</h3><div class="card">'+
+      avg2([['📊 '+T('こんしゅうの へいきん:'), durAll.length?fmtDur(avg(durAll)):'—'],
+            ['🏫 '+T('つぎの日が がっこうの日:'), durS.length?fmtDur(avg(durS)):'—'],
+            ['🏖 '+T('つぎの日が 休みの日:'), durH.length?fmtDur(avg(durH)):'—']])+
       dayChart(dur,v=>Math.max(4,(v-6)*18),v=>v>=9?'good':'',54,'めやす 9じかん',[['8じかん',36],['10じかん',72]],ds)+
       '<div class="seechip">👀 めやすは 9〜12じかん。みどりの ぼうは めやすに とどいた日。</div></div>'+
       '<h3>🔄 休みの日との ずれ</h3><div class="card">'+zureHtml+
@@ -1512,7 +1566,9 @@
         ('<div class="scorecard"><div><div class="pt">'+psc.total+'<small>てん</small></div><div style="font-size:11px;color:#4f7d3f">月〜日の けっか</div></div>'+
         '<div class="bd"><div><span>📝 きろくできた日</span><b>'+psc.rec+'/'+psc.N+'日</b></div>'+
         '<div><span>🎯 めあて</span><b>'+psc.goalPt+'/20</b></div>'+
-        '<div><span>🌱 せいかつしゅうかん</span><b>'+psc.lifePt+'/20</b></div></div></div>')
+        '<div><span>🌱 せいかつしゅうかん</span><b>'+psc.lifePt+'/20</b></div>'+
+        (S.bonus&&S.bonus[prevMon]!=null?'<div><span>🪙 ボーナスコイン</span><b>+'+S.bonus[prevMon]+'</b></div>':'')+
+        '</div></div>')
         :('<div class="card" style="text-align:center;color:#8d887a;font-size:13px">せんしゅうの きろくが たまると<br>ここに 100てんまんてんの てんすうが でるよ</div>'))+
       '<div class="seechip">👀 てんすうは <b>せんしゅう(月〜日)の けっか</b>。げつようびに あたらしく なるよ(きろく60点＋めあて20点＋せいかつ20点)</div>'+
       goalHtml+
@@ -1543,7 +1599,7 @@
       '<div class="lv"><span class="i">🏃</span>からだを<br>うごかした日<b>'+(lastMove||0)+'日</b></div>'+
       '</div></div>'+
       (g?('<div class="curgoal">いま えらんでいる めあて:<b>'+GOALS.find(x=>x.code===g.code).label+'</b></div>'):'')+
-      '<div class="gpick">🎯 こんしゅう がんばる めあてを<br><b>ひとつ</b> えらんでね</div>'+
+      '<div class="gpick">🎯 こんしゅう がんばる めあてを<br><b>ひとつ</b> えらんでね<br><span style="font-size:12px">たっせいすると ボーナス 🪙'+GOAL_BONUS+'コイン！</span></div>'+
       '<div class="goalopts" id="gopts"></div>'+
       '<div class="backrow"><button class="backbtn" id="back">← ホームへ</button></div>';
     const box=document.getElementById('gopts');
@@ -1710,7 +1766,7 @@
     document.getElementById('wipe').onclick=()=>{ if(confirm('本当に全データを削除しますか？(元に戻せません)')){
       S={name:S.name, setup:true, events:[], goals:{}, overrides:{},
         server:{url:'',token:'',child:''}, weather:{}, region:S.region, pin:S.pin,
-        owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0};
+        owned:['flower'], buddy:'flower', care:{flower:0}, coins:0, stars:0, bonus:{}};
       save();   /* save()がIndexedDBミラーも削除後の状態で上書きする(復元で戻らないように) */
       go('home'); } };
   }
