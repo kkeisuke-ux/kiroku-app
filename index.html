@@ -152,7 +152,12 @@
   .cal-h.sun,.cal-d.sun .cal-n{ color:#c2410c; } .cal-h.sat,.cal-d.sat .cal-n{ color:#2e8fc4; }
   .cal-x{ }
   .cal-d{ aspect-ratio:1; border-radius:8px; background:#faf7ec; display:flex; flex-direction:column;
-    align-items:center; justify-content:flex-start; padding-top:2px; min-height:32px; }
+    align-items:center; justify-content:flex-start; padding-top:2px; min-height:32px;
+    border:1.5px solid transparent; box-sizing:border-box; }
+  /* きろくした日=みどり(背景+実線わく)/まだの日=点線わく。ひと目で分かるように */
+  .cal-d.done{ background:#e9f5df; border-color:#a8cf96; }
+  .cal-d.done .cal-n{ color:#3f6b35; font-weight:700; }
+  .cal-d.miss{ background:#fff; border-style:dashed; border-color:#d8d2c0; }
   .cal-d.today{ outline:2px solid var(--asa); }
   .cal-d.fut{ opacity:.4; }
   .cal-n{ font-size:9px; color:#8d887a; line-height:1; }
@@ -1048,14 +1053,15 @@
       let s='';
       if(!fut){ if(sch){ if(completed(di,'m')) s+='🌞'; if(completed(di,'k')) s+='🏫'; }
         else { if(completed(di,'m')) s+='🏅'; } }
-      cells+='<div class="cal-d'+(di===tISO?' today':'')+(fut?' fut':'')+(dd.getDay()===0?' sun':(dd.getDay()===6?' sat':''))+'"'+
+      const done=!fut&&(completed(di,'m')||completed(di,'k'));   /* きろくした日(朝か帰りのどちらかでも) */
+      cells+='<div class="cal-d'+(di===tISO?' today':'')+(fut?' fut':(done?' done':' miss'))+(dd.getDay()===0?' sun':(dd.getDay()===6?' sat':''))+'"'+
         (fut?'':' data-cal="'+di+'"')+'>'+
         '<span class="cal-n">'+dn+'</span><span class="cal-s">'+s+'</span></div>';
     }
     const head=['日','月','火','水','木','金','土'].map((h,i)=>'<div class="cal-h'+(i===0?' sun':(i===6?' sat':''))+'">'+h+'</div>').join('');
     return '<div class="calwrap"><div class="calhd">📅 '+(m+1)+'がつの きろく カレンダー</div>'+
       '<div class="calgrid">'+head+cells+'</div>'+
-      '<div class="calleg">🌞あさ ・ 🏫かえり ・ 🏅休みの日 ／ 👆日を タップして きろく・なおす</div></div>';
+      '<div class="calleg">🟩 みどりの日=きろくした日 ・ 点線の日=まだの日<br>🌞あさ ・ 🏫かえり ・ 🏅休みの日 ／ 👆日を タップして きろく・なおす</div></div>';
   }
   /* カレンダーの日タップ → 確認画面をはさんで その日の きろく/なおし */
   function bindCalendar(){
