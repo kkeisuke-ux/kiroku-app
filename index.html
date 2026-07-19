@@ -386,7 +386,7 @@
         d.pin=d.pin||'1122'; d.breaks=d.breaks||[];
         d.owned=d.owned||['flower']; d.buddy=d.buddy||'flower';
         d.care=d.care||{flower:0}; d.coins=(d.coins!=null?d.coins:0);
-        d.stars=(d.starsHeld!=null?d.starsHeld:(typeof d.stars==='number'?0:0));  /* もっているスター(財布) */
+        d.stars=(typeof d.stars==='number'?d.stars:(d.starsHeld!=null?d.starsHeld:0));  /* もっているスター(財布)。読み込みで0に戻さない */
         return d; } }catch(e){}
     return {name:'', setup:false, events:[], goals:{}, overrides:{}, breaks:[],
       server:{url:'',token:'',child:''}, weather:{}, region:{lat:35.17,lon:136.91}, pin:'1122',
@@ -890,10 +890,14 @@
   }
 
   /* ============ 画面遷移 ============ */
-  let scr={name:'home'}, flowState=null;
+  let scr={name:'home'}, flowState=null, dayShown=null;
   function go(name,arg){ scr={name,arg}; render(); }
   function tick(){ document.getElementById('sb-time').textContent=new Date().toTimeString().slice(0,5);
-    document.getElementById('sb-day').textContent=DOWJ[today().getDay()]; }
+    document.getElementById('sb-day').textContent=DOWJ[today().getDay()];
+    /* 開きっぱなしの端末で日付が変わったら描き直す(回答の途中は除く)。
+       これが無いと前日に描画した「あさ・かえり」ボタンが、長期休み中や
+       休日になっても残り続ける(iPadでページを開いたまま日をまたぐ運用) */
+    if(dayShown && dayShown!==iso(today()) && scr.name!=='flow') render(); }
   setInterval(tick,30000);
 
   /* ============ フロー実行(回答を保存) ============ */
@@ -1673,9 +1677,12 @@
       const a=document.getElementById('bk-a').value, b=document.getElementById('bk-b').value;
       if(!a||!b){ alert('開始日と終了日を選んでください'); return; }
       if(a>b){ alert('開始日が終了日より後になっています'); return; }
-      S.breaks=S.breaks||[]; S.breaks.push({a:a,b:b}); save(); go('data'); };
+      S.breaks=S.breaks||[]; S.breaks.push({a:a,b:b});
+      ev({t:'break',op:'add',a:a,b:b}); syncNow();   /* イベント化してサーバのスナップショットにも即反映 */
+      go('data'); };
     (S.breaks||[]).forEach((b,i)=>{ const el=document.getElementById('bkdel'+i);
-      if(el) el.onclick=()=>{ S.breaks.splice(i,1); save(); go('data'); }; });
+      if(el) el.onclick=()=>{ S.breaks.splice(i,1);
+        ev({t:'break',op:'del',a:b.a,b:b.b}); syncNow(); go('data'); }; });
     document.getElementById('demo').onclick=()=>{ genDemo(); alert('デモデータを生成しました'); go('home'); };
     document.getElementById('wipe').onclick=()=>{ if(confirm('本当に全データを削除しますか？(元に戻せません)')){
       S={name:S.name, setup:true, events:[], goals:{}, overrides:{},
@@ -1815,9 +1822,12 @@
       const a=document.getElementById('bk-a2').value, b=document.getElementById('bk-b2').value;
       if(!a||!b){ document.getElementById('bkmsg').textContent=T('「いつから」と「いつまで」を えらんでね'); return; }
       if(a>b){ document.getElementById('bkmsg').textContent=T('「いつから」が「いつまで」より あとに なっているよ'); return; }
-      S.breaks=S.breaks||[]; S.breaks.push({a:a,b:b}); save(); go('breaks'); };
+      S.breaks=S.breaks||[]; S.breaks.push({a:a,b:b});
+      ev({t:'break',op:'add',a:a,b:b}); syncNow();   /* イベント化してサーバのスナップショットにも即反映 */
+      go('breaks'); };
     (S.breaks||[]).forEach((b,i)=>{ const el=document.getElementById('bkx'+i);
-      if(el) el.onclick=()=>{ S.breaks.splice(i,1); save(); go('breaks'); }; });
+      if(el) el.onclick=()=>{ S.breaks.splice(i,1);
+        ev({t:'break',op:'del',a:b.a,b:b.b}); syncNow(); go('breaks'); }; });
   }
 
   /* ============ 初回セットアップ ============ */
@@ -1856,6 +1866,7 @@
   }
 
   function render(){
+    dayShown=iso(today());
     tick();
     if(!S.setup){ renderSetup(); return; }
     switch(scr.name){
@@ -1882,7 +1893,7 @@
   restoreFromMirror();   /* localStorage消失時はミラーから自動復元して再描画 */
   /* 電波が戻った時・アプリに戻ってきた時に未送信分を自動再送 */
   window.addEventListener('online', ()=>{ syncNow(); });
-  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncNow(); });
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ syncNow(); tick(); } });
   /* 画面の左はしから右へスワイプ=「← もどる」ボタンと同じ(iPhone/iPadの操作感) */
   let swX=null, swY=null;
   document.addEventListener('touchstart', e=>{ const t=e.touches[0];
