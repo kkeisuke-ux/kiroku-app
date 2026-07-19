@@ -146,7 +146,10 @@
   .minibtn.gc{ background:var(--meate); color:#fff; border-color:var(--meate); }
   /* カレンダー */
   .calwrap{ margin-top:12px; background:#fff; border:2px solid #e3ddc9; border-radius:16px; padding:10px 10px 8px; }
-  .calhd{ font-size:13px; font-weight:700; margin-bottom:6px; }
+  .calhd{ font-size:13px; font-weight:700; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between; gap:4px; }
+  .calnav{ font:inherit; font-size:11px; font-weight:700; border:1px solid #e3ddc9; background:#faf7ec;
+    border-radius:999px; padding:4px 9px; color:#6b675c; white-space:nowrap; }
+  .calnav:disabled{ opacity:.35; }
   .calgrid{ display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
   .cal-h{ font-size:10px; text-align:center; color:#8d887a; font-weight:700; padding:2px 0; }
   .cal-h.sun,.cal-d.sun .cal-n{ color:#c2410c; } .cal-h.sat,.cal-d.sat .cal-n{ color:#2e8fc4; }
@@ -934,7 +937,7 @@
 
   /* ============ 画面遷移 ============ */
   let scr={name:'home'}, flowState=null, dayShown=null;
-  function go(name,arg){ scr={name,arg}; render(); }
+  function go(name,arg){ if(name!==scr.name) calOff=0; scr={name,arg}; render(); }   /* 画面を移ったらカレンダーは今月へ */
   function tick(){ document.getElementById('sb-time').textContent=new Date().toTimeString().slice(0,5);
     document.getElementById('sb-day').textContent=DOWJ[today().getDay()];
     /* 開きっぱなしの端末で日付が変わったら描き直す(回答の途中は除く)。
@@ -1044,8 +1047,11 @@
     el.appendChild(s); setTimeout(()=>s.remove(),700); } }
 
   /* ============ 今月の スタンプカレンダー ============ */
+  let calOff=0;   /* カレンダーの表示月(0=今月、-1=まえの月…)。画面を移ると今月に戻る */
   function monthCalendar(){
-    const t=today(), y=t.getFullYear(), m=t.getMonth(), tISO=iso(t);
+    const t=today(), tISO=iso(t);
+    const base=new Date(t.getFullYear(), t.getMonth()+calOff, 1);
+    const y=base.getFullYear(), m=base.getMonth();
     const days=new Date(y,m+1,0).getDate(), lead=new Date(y,m,1).getDay();
     let cells=''; for(let i=0;i<lead;i++) cells+='<div class="cal-x"></div>';
     for(let dn=1;dn<=days;dn++){
@@ -1059,14 +1065,26 @@
         '<span class="cal-n">'+dn+'</span><span class="cal-s">'+s+'</span></div>';
     }
     const head=['日','月','火','水','木','金','土'].map((h,i)=>'<div class="cal-h'+(i===0?' sun':(i===6?' sat':''))+'">'+h+'</div>').join('');
-    return '<div class="calwrap"><div class="calhd">📅 '+(m+1)+'がつの きろく カレンダー</div>'+
+    const title=(y!==t.getFullYear()?y+'ねん ':'')+(m+1)+'がつの きろく';
+    return '<div class="calwrap"><div class="calhd">'+
+      '<button class="calnav" id="cal-prev"'+(calOff<=-24?' disabled':'')+'>◀ まえの月</button>'+
+      '<span>📅 '+title+'</span>'+
+      '<button class="calnav" id="cal-next"'+(calOff>=0?' disabled':'')+'>つぎの月 ▶</button></div>'+
       '<div class="calgrid">'+head+cells+'</div>'+
       '<div class="calleg">🟩 みどりの日=きろくした日 ・ 点線の日=まだの日<br>🌞あさ ・ 🏫かえり ・ 🏅休みの日 ／ 👆日を タップして きろく・なおす</div></div>';
   }
-  /* カレンダーの日タップ → 確認画面をはさんで その日の きろく/なおし */
+  /* カレンダーの日タップ → 確認画面をはさんで その日の きろく/なおし。
+     月おくりは カレンダー部分だけ描き直す(画面のスクロール位置を保つ) */
   function bindCalendar(){
     app.querySelectorAll('[data-cal]').forEach(el=>{ el.style.cursor='pointer';
-      el.onclick=()=>go('editday',el.dataset.cal); }); }
+      el.onclick=()=>go('editday',el.dataset.cal); });
+    const refreshCal=()=>{ const w=app.querySelector('.calwrap');
+      if(w){ w.outerHTML=monthCalendar(); bindCalendar(); } };
+    const cp=document.getElementById('cal-prev');
+    if(cp) cp.onclick=()=>{ if(calOff>-24){ calOff--; refreshCal(); } };
+    const cn=document.getElementById('cal-next');
+    if(cn) cn.onclick=()=>{ if(calOff<0){ calOff++; refreshCal(); } };
+  }
   /* 過去日をなおす前の確認画面:あいまいな記憶での入れ直し(ごほうび目当て)を防ぐ。
      ・「おもいだせる ことだけ なおす」を先に約束させる
      ・ごほうびが出るのは キャッチアップ期間(きのう・おととい)の未入力日だけ。
@@ -1982,15 +2000,17 @@
   /* 電波が戻った時・アプリに戻ってきた時に未送信分を自動再送 */
   window.addEventListener('online', ()=>{ syncNow(); });
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ syncNow(); tick(); } });
-  /* 画面の左はしから右へスワイプ=「← もどる」ボタンと同じ(iPhone/iPadの操作感) */
+  /* 画面の左よりから右へスワイプ=「← もどる」ボタンと同じ(iPhone/iPadの操作感)。
+     開始ゾーンは左120px:iOSは左端〜30px程度をOSの「戻る」ジェスチャに取るため、
+     40pxだと実質反応しない。広げることでSafari・ホーム画面アプリの両方で効く */
   let swX=null, swY=null;
   document.addEventListener('touchstart', e=>{ const t=e.touches[0];
-    swX=(t.clientX<=40)?t.clientX:null; swY=t.clientY; }, {passive:true});
+    swX=(t.clientX<=120)?t.clientX:null; swY=t.clientY; }, {passive:true});
   document.addEventListener('touchend', e=>{
     if(swX==null) return;
     const t=e.changedTouches[0], dx=t.clientX-swX, dy=Math.abs(t.clientY-swY);
     swX=null;
-    if(dx>70 && dy<60){ const b=document.getElementById('back')||document.querySelector('.backbtn');
+    if(dx>60 && dy<80){ const b=document.getElementById('back')||document.querySelector('.backbtn');
       if(b) b.click(); }
   }, {passive:true});
 })();
