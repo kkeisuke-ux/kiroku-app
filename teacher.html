@@ -4,41 +4,86 @@
 <style>
   body{ margin:0; background:#eef0f3; color:#33312a;
     font-family:"BIZ UDPGothic","Hiragino Maru Gothic ProN","Yu Gothic UI","Meiryo",sans-serif; line-height:1.7; }
-  .wrap{ max-width:980px; margin:0 auto; padding:18px; }
-  h1{ font-size:20px; margin:6px 0 2px; }
-  .sub{ font-size:12px; color:#6b675c; margin-bottom:14px; }
-  .card{ background:#fff; border-radius:14px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
-  .cfg{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  .cfg input,.cfg select{ font:inherit; padding:7px 10px; border:1.5px solid #cfcaba; border-radius:8px; }
-  .cfg input#url{ flex:1; min-width:260px; } .cfg input#tok{ width:220px; }
+  .wrap{ max-width:760px; margin:0 auto; padding:16px 14px 40px; }
+  h1{ font-size:19px; margin:6px 0 2px; }
+  .sub{ font-size:11.5px; color:#6b675c; margin-bottom:10px; }
+  .card{ background:#fff; border-radius:14px; padding:12px 14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .cfg input,.cfg select,.cfg textarea{ font:inherit; padding:6px 10px; border:1.5px solid #cfcaba; border-radius:8px; }
   button{ font:inherit; cursor:pointer; }
-  .btn{ background:#4f9d45; color:#fff; border:none; border-radius:8px; padding:8px 18px; font-weight:700; }
+  .btn{ background:#4f9d45; color:#fff; border:none; border-radius:8px; padding:7px 16px; font-weight:700; }
   .btn.gray{ background:#8d887a; }
-  #msg{ font-size:13px; color:#c2410c; min-height:20px; }
-  table{ border-collapse:collapse; width:100%; font-size:12.5px; }
-  th,td{ border-bottom:1px solid #eceade; padding:6px 8px; text-align:center; white-space:nowrap; }
-  th{ background:#f7f5ee; font-size:11.5px; position:sticky; top:0; }
-  td.l{ text-align:left; font-weight:700; }
+  #msg{ font-size:12.5px; color:#c2410c; min-height:18px; }
+  .tabs{ display:flex; gap:6px; margin-bottom:10px; }
+  .tabs button{ flex:1; border:1.5px solid #cfcaba; background:#fff; border-radius:10px; padding:8px 0; font-weight:700; color:#6b675c; }
+  .tabs button.on{ background:#3d4c8f; border-color:#3d4c8f; color:#fff; }
+  .a-meta{ display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 10px; }
+  .a-chip{ background:#fff; border:1px solid #ddd8ca; border-radius:999px; padding:2px 12px; font-size:11.5px; }
+  h4{ font-size:14px; margin:2px 0 8px; }
+  .colh{ font-size:12px; font-weight:700; color:#6b675c; text-align:center; margin-bottom:4px; }
+  /* 円グラフ */
+  .pierow{ display:flex; flex-wrap:wrap; gap:10px; }
+  .pieitem{ display:flex; gap:10px; align-items:center; }
+  .pie{ width:64px; height:64px; border-radius:50%; flex:none; }
+  .pleg{ font-size:11.5px; }
+  .pleg i{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+  /* 横棒 */
+  .hrow{ margin-bottom:2px; }
+  .hbar{ display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .hbar .lab{ flex:0 0 118px; font-size:11.5px; color:#6b675c; text-align:right; }
+  .hbar .bar{ height:14px; border-radius:7px; background:#7fb069; min-width:3px; }
+  .hbar .n{ font-size:11.5px; font-weight:700; }
+  .barnames{ font-size:11px; color:#6b675c; background:#f7f5ee; border-radius:8px; padding:4px 10px; margin:2px 0 4px 126px; }
+  .click{ cursor:pointer; }
+  .miss{ background:#fff8ec; border:1.5px solid #f0d9a8; border-radius:12px; padding:10px 12px; margin-bottom:12px; }
+  .miss .t{ display:flex; justify-content:space-between; align-items:center; font-weight:700; font-size:13px; margin-bottom:4px; }
+  .mrow{ display:flex; align-items:center; gap:6px; font-size:12.5px; margin-bottom:4px; flex-wrap:wrap; }
+  .mrow .nm{ font-weight:700; min-width:90px; }
+  .mrow .stt{ color:#8d887a; font-size:11.5px; }
+  .mrow button{ font-size:11px; border:1px solid #cfcaba; background:#fff; border-radius:8px; padding:2px 8px; }
+  .talkcard{ background:#eef7ff; border:1.5px solid #bcd9f0; border-radius:12px; padding:10px 12px; font-size:12.5px; margin-bottom:12px; }
+  .alert{ background:#fdf0ec; border:1.5px solid #eec4b4; border-radius:12px; padding:10px 12px; margin-bottom:12px; }
+  .alert .t{ font-weight:700; font-size:13px; margin-bottom:4px; }
+  .alert .frow{ font-size:12.5px; margin-bottom:2px; }
+  .legend2{ display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:#6b675c; margin-top:4px; }
+  .legend2 i{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:3px; vertical-align:-1px; }
+  table{ border-collapse:collapse; width:100%; font-size:12px; }
+  th,td{ border-bottom:1px solid #eceade; padding:5px 6px; text-align:center; white-space:nowrap; }
+  th{ background:#f7f5ee; font-size:11px; }
+  td.l{ text-align:left; font-weight:700; cursor:pointer; color:#2e5f8f; }
   .warn{ background:#fdeae2; color:#c2410c; font-weight:700; border-radius:6px; }
-  .ok2{ color:#2c6e1f; }
-  .note{ font-size:11.5px; color:#6b675c; }
+  .note{ font-size:11px; color:#6b675c; }
+  .a-note{ font-size:11px; color:#8d887a; margin-top:4px; }
   .tblwrap{ overflow-x:auto; }
-  @media print{ .cfg,.btn,#msg{ display:none; } body{ background:#fff; } }
+  .kcard{ background:#f7f9ff; border:1.5px solid #c9d4ee; border-radius:12px; padding:10px 12px; margin-top:10px; font-size:12.5px; }
+  details.cfgbox summary{ cursor:pointer; font-weight:700; font-size:13px; }
+  @media print{ .cfg,.tabs,#msg,.btn,details.cfgbox{ display:none; } body{ background:#fff; } }
 </style>
 <div class="wrap">
-  <h1>🏫 まいにち きろく - 先生向けダッシュボード</h1>
-  <div class="sub">クラスの記録状況の一覧(仮名IDごと)。名前はサーバにないため、お手元の「名前⇔仮名ID」名簿と突き合わせてご覧ください。</div>
-  <div class="card cfg">
-    <input id="url" placeholder="サーバURL(…/exec)">
-    <input id="tok" type="password" placeholder="研究者用トークン(ADMIN_TOKEN)">
-    <select id="days"><option value="7">直近7日</option><option value="14">直近14日</option><option value="28">直近28日</option></select>
-    <button class="btn" id="load">読み込む</button>
-    <button class="btn gray" id="print">🖨 印刷</button>
-    <div class="note" style="flex-basis:100%">トークンはこの端末のブラウザ内にのみ保存されます。共用PCでは読み込み後にトークン欄を消してください。</div>
-    <div id="msg"></div>
+  <h1>🏫 <span id="clsname">クラス</span> ダッシュボード</h1>
+  <div class="sub">子どもの自己申告に基づく参考情報です。名前は先生の端末内の名簿でのみ表示され、サーバには送られません。</div>
+
+  <details class="cfgbox card" id="cfgbox" open>
+    <summary>⚙️ 設定(サーバ・名簿)</summary>
+    <div class="cfg" style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+      <input id="cls" placeholder="クラス名(例 3年2組)">
+      <input id="url" placeholder="サーバURL(…/exec)">
+      <input id="tok" type="password" placeholder="研究者用トークン(ADMIN_TOKEN)">
+      <textarea id="map" rows="4" placeholder="名簿(1行に 仮名ID,名前)&#10;例: k5f0f13e5b781d5,はな&#10;仮名IDは各端末の⚙️画面に表示されます"></textarea>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn" id="load">読み込む</button>
+        <button class="btn gray" id="print">🖨 印刷</button>
+        <span class="note">トークン・名簿はこの端末のブラウザ内にのみ保存されます</span>
+      </div>
+      <div id="msg"></div>
+    </div>
+  </details>
+
+  <div class="tabs" id="tabs" hidden>
+    <button data-tab="today">きょう</button>
+    <button data-tab="week">週次</button>
+    <button data-tab="list">一覧</button>
   </div>
-  <div class="card tblwrap" id="out"><div class="note">サーバURLとトークンを入れて「読み込む」を押してください。</div></div>
-  <div class="note">見方:⚠は「昼休み・放課後に『ひとり』が直近2週間で4回以上」または「睡眠のずれが1時間超」。数値は子どもの自己申告に基づく参考情報です。学校日の判定は月〜金(端末ごとの長期休み設定は反映されません)。</div>
+  <div id="out"></div>
 </div>
 <script>
 (function(){
@@ -46,30 +91,31 @@
   var BED_H=[19.5,20,20.5,21,21.5,22,22.5,23,23.5];
   var WAKE_H=[5.5,6,6.5,7,7.5,8,8.5,9,9.5];
   var ST_H=[0,0.5,1,2,3];
+  var BED_L=['9時より前','9時ごろ','9時半ごろ','10時ごろ','10時半ごろ','11時ごろ','11時半ごろ','12時ごろ','12時より後'];
+  var WAKE_L=['6時より前','6時ごろ','6時半ごろ','7時ごろ','7時半ごろ','8時ごろ','8時半ごろ','9時ごろ','9時より後'];
+  var ST_L=['あそびでは使わなかった','30分くらい','1時間くらい','2時間くらい','3時間以上'];
+  var K2A_L=['おにごっこ・走る','ボール','ゆうぐ・なわとび','そのほか'];
+  var K2B_L=['きょうしつ・ろうか','たいいくかん','としょしつ','そのほか'];
+  var K2C_L=['おしゃべり','ほん・おえかき','タブレット・べんきょう','うんどう・あそび','そのほか'];
   var DOW=['日','月','火','水','木','金','土'];
 
-  function normD(d){ /* 旧データはSheets日付化でISO日時の場合あり→端末TZで日付へ */
-    d=String(d||''); if(d.indexOf('T')>0){ var x=new Date(d); if(!isNaN(x)){
+  function normD(d){ d=String(d||''); if(d.indexOf('T')>0){ var x=new Date(d); if(!isNaN(x)){
       return x.getFullYear()+'-'+('0'+(x.getMonth()+1)).slice(-2)+'-'+('0'+x.getDate()).slice(-2); } }
     return d.slice(0,10); }
   function fromIso(s){ var p=s.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); }
+  function toIso(x){ return x.getFullYear()+'-'+('0'+(x.getMonth()+1)).slice(-2)+'-'+('0'+x.getDate()).slice(-2); }
+  function addD(s,n){ var x=fromIso(s); x.setDate(x.getDate()+n); return toIso(x); }
   function isWeekday(d){ var w=fromIso(d).getDay(); return w>=1&&w<=5; }
   function avg(v){ return v.reduce(function(a,b){return a+b;},0)/v.length; }
+  function num(v){ return (v==null||v==='DK'||v==='')?null:+v; }
   function fmtT(h){ if(h==null) return '—'; if(h>=19) h-=12;
     var hh=Math.floor(h), half=(h-hh)>=0.25&&(h-hh)<0.75; return hh+'時'+(half?'半':''); }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
-  /* rows(export形式)→ 子どもごとの集計。純関数(テスト可能) */
-  function computeStats(head, rows, days, todayIso){
+  /* ---- 生データ→索引(child→date→qid→最新回答) ---- */
+  function buildIndex(head, rows){
     var ix={}; head.forEach(function(k,i){ ix[k]=i; });
-    var win=[]; var t=fromIso(todayIso);
-    for(var i=days-1;i>=0;i--){ var x=new Date(t); x.setDate(x.getDate()-i);
-      win.push(x.getFullYear()+'-'+('0'+(x.getMonth()+1)).slice(-2)+'-'+('0'+x.getDate()).slice(-2)); }
-    var winSet={}; win.forEach(function(d){ winSet[d]=1; });
-    var last14={}; for(var j=13;j>=0;j--){ var y=new Date(t); y.setDate(y.getDate()-j);
-      last14[y.getFullYear()+'-'+('0'+(y.getMonth()+1)).slice(-2)+'-'+('0'+y.getDate()).slice(-2)]=1; }
-
-    var A={};   /* child -> date -> qid -> {a, at} 最新回答 */
-    var lastRec={};
+    var A={}, lastRec={};
     rows.forEach(function(r){
       var c=String(r[ix.child]); if(!c) return;
       var at=String(r[ix.at]||'');
@@ -80,82 +126,315 @@
       A[c]=A[c]||{}; A[c][d]=A[c][d]||{};
       if(!A[c][d][q]||at>A[c][d][q].at) A[c][d][q]={a:r[ix.a], at:at};
     });
-    function ans(c,d,q){ var v=A[c]&&A[c][d]&&A[c][d][q]; return v?v.a:null; }
-    function num(v){ return (v==null||v==='DK'||v==='')?null:+v; }
+    return {A:A, lastRec:lastRec, children:Object.keys(A).sort()};
+  }
+  function ansOf(IDX,c,d,q){ var v=IDX.A[c]&&IDX.A[c][d]&&IDX.A[c][d][q]; return v?v.a:null; }
+  window.__buildIndex=buildIndex;
 
-    return Object.keys(A).sort().map(function(c){
+  /* ---- 分布(選択肢ごとの人数と該当者ID) ---- */
+  function dist(IDX,kids,d,q,nOpts){
+    var out=[]; for(var i=0;i<nOpts;i++) out.push([]);
+    kids.forEach(function(c){ var a=num(ansOf(IDX,c,d,q)); if(a!=null&&a>=0&&a<nOpts) out[a].push(c); });
+    return out;
+  }
+
+  var IDX=null, MAP={}, CLS='クラス', TAB='today', DETAIL=null;
+  function nameOf(c){ return MAP[c]||('('+c.slice(0,8)+'…)'); }
+  function names(ids){ return ids.length?ids.map(nameOf).join('、'):'(なし)'; }
+
+  /* ---- 部品 ---- */
+  var uidSeq=0;
+  function pie(color,pct,l1,l2,ids1,ids2){
+    var id='nb'+(uidSeq++);
+    return '<div style="flex:1;min-width:190px"><div class="pieitem click" data-nb="'+id+'">'+
+      '<div class="pie" style="background:conic-gradient('+color+' 0 '+pct+'%, #e3ddc9 '+pct+'% 100%)"></div>'+
+      '<div class="pleg"><div><i style="background:'+color+'"></i>'+l1+'</div><div><i style="background:#e3ddc9"></i>'+l2+'</div></div></div>'+
+      '<div class="barnames" id="'+id+'" hidden style="margin-left:0"><b>'+l1+'</b>:'+esc(names(ids1))+'<br><b>'+l2+'</b>:'+esc(names(ids2))+'</div></div>';
+  }
+  function nb(lab,ids,maxN,color){
+    var id='nb'+(uidSeq++);
+    var w=Math.max(4, ids.length/Math.max(1,maxN)*150);
+    return '<div class="hrow"><div class="hbar" data-nb="'+id+'"><span class="lab">'+lab+'</span>'+
+      '<div class="bar" style="width:'+w.toFixed(0)+'px'+(color?';background:'+color:'')+'"></div><span class="n">'+ids.length+'人</span></div>'+
+      '<div class="barnames" id="'+id+'" hidden>'+esc(names(ids))+'</div></div>';
+  }
+  function bindBars(){
+    document.querySelectorAll('[data-nb]').forEach(function(el){
+      el.onclick=function(){ var d=document.getElementById(el.getAttribute('data-nb')); if(d) d.hidden=!d.hidden; };
+    });
+  }
+  function distBars(dd,labels,color){
+    var mx=Math.max.apply(null,dd.map(function(x){return x.length;}).concat([1]));
+    return dd.map(function(ids,i){ return nb(labels[i],ids,mx,color); }).join('');
+  }
+
+  /* ---- きょうのレポート ---- */
+  function renderToday(){
+    var t=new Date(), d=toIso(t);
+    var kids=IDX.children;
+    var resp=kids.filter(function(c){ return IDX.A[c]&&IDX.A[c][d]; });
+    var noResp=kids.filter(function(c){ return !(IDX.A[c]&&IDX.A[c][d]); });
+    var h='<div class="a-meta"><span class="a-chip">'+ (t.getMonth()+1)+'/'+t.getDate()+'('+DOW[t.getDay()]+')</span>'+
+      '<span class="a-chip">入力 '+resp.length+'/'+kids.length+'人</span></div>';
+    /* 未入力 */
+    var stKey='kiroku_teacher_status_'+d;
+    var stMap={}; try{ stMap=JSON.parse(localStorage.getItem(stKey))||{}; }catch(e){}
+    if(noResp.length){
+      h+='<div class="miss"><div class="t"><span>📋 きょうの未入力 '+noResp.length+'人</span></div>'+
+        noResp.map(function(c){ return '<div class="mrow"><span class="nm">'+esc(nameOf(c))+'</span>'+
+          '<span class="stt" data-c="'+c+'">'+(stMap[c]?('先生メモ:'+stMap[c]):'')+'</span>'+
+          ['欠席','早退・遅刻','確認中'].map(function(s){ return '<button data-st="'+s+'" data-c="'+c+'">'+s+'</button>'; }).join('')+
+          '</div>'; }).join('')+
+        '<div class="a-note">メモは任意・この端末にだけ保存されます。直さなくても翌朝の本人回答で確定します。</div></div>';
+    }
+    /* 昨日の放課後(今日の朝の記録) */
+    var m5=dist(IDX,kids,d,'M5',2), m5a=dist(IDX,kids,d,'M5a',3);
+    var didN=m5[0].length, notN=m5[1].length, obsM5=didN+notN;
+    var sotoIds=m5a[0].concat(m5a[2]), nakaIds=m5a[1];
+    h+='<div class="card"><h4>🏃⚽ 昨日の放課後(タップで名前)</h4><div class="pierow">'+
+      pie('#7fb069', obsM5?Math.round(didN/obsM5*100):0,
+        '体を動かす遊びを した '+(obsM5?Math.round(didN/obsM5*100):0)+'%('+didN+'人)','しなかった('+notN+'人)',m5[0],m5[1])+
+      pie('#2e8fc4', obsM5?Math.round(sotoIds.length/obsM5*100):0,
+        'そとで遊んだ '+sotoIds.length+'人','なか・なし',sotoIds,nakaIds.concat(m5[1]))+
+      '</div></div>';
+    /* すいみん */
+    var bd=dist(IDX,kids,d,'M2',9), wk=dist(IDX,kids,d,'M3',9);
+    h+='<div class="card"><h4>🛏️⏰ すいみん(タップで名前)</h4>'+
+      '<div style="display:grid;grid-template-columns:1fr;gap:8px">'+
+      '<div><div class="colh">🌙 昨日の就寝(よる)</div>'+distBars(bd,BED_L,'#3d4c8f')+'</div>'+
+      '<div><div class="colh">☀️ 今日の起床(あさ)</div>'+distBars(wk,WAKE_L,'#f6a13a')+'</div></div></div>';
+    /* スクリーンタイム */
+    var m4=dist(IDX,kids,d,'M4',2), sta=dist(IDX,kids,d,'M4a',5);
+    var stDist=[m4[1].concat(sta[0])].concat(sta.slice(1));
+    var stObs=stDist.reduce(function(a,x){return a+x.length;},0);
+    var stOk=stDist[0].length+stDist[1].length+stDist[2].length+stDist[3].length;
+    h+='<div class="card"><h4>🎮📱 昨日のあそびのスクリーンタイム(タップで名前)</h4>'+
+      distBars(stDist,['つかわなかった','30分くらい','1時間くらい','2時間くらい','3時間以上'],'#c9a4e0')+
+      (stObs?'<div class="a-note">めやす(2時間以内)の子 '+Math.round(stOk/stObs*100)+'%</div>':'')+'</div>';
+    /* きょうの休み時間 */
+    var k1=dist(IDX,kids,d,'K1',3), k2=dist(IDX,kids,d,'K2',3);
+    var k1obs=k1[0].length+k1[1].length, k2obs=k2[0].length+k2[1].length;
+    var k2a=dist(IDX,kids,d,'K2a',4), k2b=dist(IDX,kids,d,'K2b',4), k2c=dist(IDX,kids,d,'K2c',5);
+    h+='<div class="card"><h4>🕙 きょうの休み時間(タップで名前)</h4>'+
+      '<div class="colh" style="text-align:left">🕙 中休み(2・3時間目の間)</div><div class="pierow">'+
+      pie('#7fb069', k1obs?Math.round(k1[0].length/k1obs*100):0,'そとで遊んだ '+k1[0].length+'人','なかにいた '+k1[1].length+'人',k1[0],k1[1])+'</div>'+
+      '<div class="colh" style="text-align:left;margin-top:8px">🍚 昼休み(給食後)</div><div class="pierow">'+
+      pie('#e8940f', k2obs?Math.round(k2[0].length/k2obs*100):0,'そとで遊んだ '+k2[0].length+'人','なかにいた '+k2[1].length+'人',k2[0],k2[1])+'</div>'+
+      '<div class="note" style="margin:8px 0 4px">昼休み〈そと〉なにをした？</div>'+distBars(k2a,K2A_L,'#7fb069')+
+      '<div class="note" style="margin:8px 0 4px">昼休み〈なか〉どこにいた？/なにをした？</div>'+distBars(k2b,K2B_L,'#8d95c9')+distBars(k2c,K2C_L,'#8d95c9')+'</div>';
+    /* 話題カード */
+    var topAct=null, topN=0; k2a.forEach(function(ids,i){ if(ids.length>topN){topN=ids.length; topAct=K2A_L[i];} });
+    var topBed=null, tbN=0; bd.forEach(function(ids,i){ if(ids.length>tbN){tbN=ids.length; topBed=BED_L[i];} });
+    var talk=[];
+    if(topAct&&topN>0) talk.push('きょうの昼休みは「'+topAct+'」が'+topN+'人で1番人気でした。');
+    if(topBed&&tbN>0) talk.push('昨日の就寝は「'+topBed+'」が最多でした。');
+    if(obsM5) talk.push('放課後に体を動かす遊びをした子は'+Math.round(didN/obsM5*100)+'%です。');
+    if(talk.length) h+='<div class="talkcard">💬 <b>帰りの会の話題に</b>:'+talk.join('')+'</div>';
+    h+='<button class="btn" id="toW">📈 週次レポートを見る →</button>';
+    document.getElementById('out').innerHTML=h;
+    var tw=document.getElementById('toW'); if(tw) tw.onclick=function(){ setTab('week'); };
+    document.querySelectorAll('button[data-st]').forEach(function(b){
+      b.onclick=function(){ var c=b.getAttribute('data-c');
+        stMap[c]=b.getAttribute('data-st');
+        try{ localStorage.setItem(stKey, JSON.stringify(stMap)); }catch(e){}
+        document.querySelector('.stt[data-c="'+c+'"]').textContent='先生メモ:'+stMap[c]; };
+    });
+    bindBars();
+  }
+
+  /* ---- 週次(直近4週の推移+お知らせ) ---- */
+  function weekMon(s){ var x=fromIso(s), w=(x.getDay()+6)%7; x.setDate(x.getDate()-w); return toIso(x); }
+  function weeklyRates(IDX,kids,monIso){
+    var soto=0,sotoObs=0, mv=0,mvObs=0, stOk=0,stObs=0, bed9=0,bedObs=0;
+    kids.forEach(function(c){
+      for(var i=0;i<7;i++){ var d=addD(monIso,i);
+        var p=num(ansOf(IDX,c,d,'M5a')), k1=num(ansOf(IDX,c,d,'K1')), k2=num(ansOf(IDX,c,d,'K2'));
+        if(p!=null||k1!=null||k2!=null){ sotoObs++; if(p===0||p===2||k1===0||k2===0) soto++; }
+        var m5=num(ansOf(IDX,c,d,'M5')); if(m5!=null){ mvObs++; if(m5===0) mv++; }
+        var g=ansOf(IDX,c,d,'M4');
+        if(+g===1){ stObs++; stOk++; }
+        else{ var sa=num(ansOf(IDX,c,d,'M4a')); if(sa!=null){ stObs++; if(ST_H[sa]<=2) stOk++; } }
+        var b=num(ansOf(IDX,c,d,'M2')); if(b!=null){ bedObs++; if(b<=3) bed9++; }
+      }
+    });
+    var pc=function(a,b){ return b?Math.round(a/b*100):null; };
+    return {soto:pc(soto,sotoObs), move:pc(mv,mvObs), st:pc(stOk,stObs), bed9:pc(bed9,bedObs)};
+  }
+  window.__weeklyRates=weeklyRates;
+
+  function lineSVG(series,xlabs){
+    var w=340,h=140,l=30,r=8,t=10,btm=22;
+    var n=xlabs.length, xw=(w-l-r)/Math.max(1,n-1);
+    var Y=function(v){ return t+(100-v)/100*(h-t-btm); };
+    var out='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto">';
+    [0,25,50,75,100].forEach(function(g){ out+='<line x1="'+l+'" y1="'+Y(g)+'" x2="'+(w-r)+'" y2="'+Y(g)+'" stroke="#eee9dc"/>'+
+      '<text x="'+(l-4)+'" y="'+(Y(g)+3)+'" font-size="8" fill="#a9a493" text-anchor="end">'+g+'</text>'; });
+    series.forEach(function(s){
+      var pts=[]; s.v.forEach(function(v,i){ if(v!=null) pts.push((l+i*xw)+','+Y(v)); });
+      if(pts.length>1) out+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+s.c+'" stroke-width="2.5" stroke-linejoin="round"/>';
+      s.v.forEach(function(v,i){ if(v!=null) out+='<circle cx="'+(l+i*xw)+'" cy="'+Y(v)+'" r="3" fill="'+s.c+'"/>'; });
+    });
+    xlabs.forEach(function(x,i){ out+='<text x="'+(l+i*xw)+'" y="'+(h-6)+'" font-size="8" fill="#8d887a" text-anchor="middle">'+x+'</text>'; });
+    return out+'</svg>';
+  }
+
+  function weekFlags(IDX,kids,monIso,todayIso){
+    var flags=[];
+    kids.forEach(function(c){
+      var mvObs=0,mvYes=0, stObs=0,stOver=0, bedObs=0,bedLate=0, hitori=0;
+      for(var i=0;i<7;i++){ var d=addD(monIso,i); if(d>todayIso) break;
+        var m5=num(ansOf(IDX,c,d,'M5')); if(m5!=null){ mvObs++; if(m5===0) mvYes++; }
+        var g=ansOf(IDX,c,d,'M4');
+        if(+g===1){ stObs++; }
+        else{ var sa=num(ansOf(IDX,c,d,'M4a')); if(sa!=null){ stObs++; if(ST_H[sa]>2) stOver++; } }
+        var b=num(ansOf(IDX,c,d,'M2')); if(b!=null){ bedObs++; if(b>=5) bedLate++; }
+      }
+      for(var j=13;j>=0;j--){ var d2=addD(todayIso,-j);
+        if(num(ansOf(IDX,c,d2,'K3'))===0) hitori++;
+        if(num(ansOf(IDX,c,d2,'M5c'))===0) hitori++;
+      }
+      if(mvObs>=3&&mvYes===0) flags.push([c,'体を動かす遊びが今週0日']);
+      if(stObs>=3&&stOver===stObs) flags.push([c,'あそびのゲーム・動画が毎日2時間超']);
+      if(bedObs>=3&&bedLate===bedObs) flags.push([c,'就寝が毎日10時以降']);
+      if(hitori>=4) flags.push([c,'ひとりで過ごす回答が多い(2週間で'+hitori+'回)']);
+    });
+    return flags;
+  }
+  window.__weekFlags=weekFlags;
+
+  function renderWeek(){
+    var t=new Date(), todayIso=toIso(t), mon=weekMon(todayIso);
+    var kids=IDX.children;
+    var mons=[3,2,1,0].map(function(n){ return addD(mon,-7*n); });
+    var R=mons.map(function(m){ return weeklyRates(IDX,kids,m); });
+    var xl=mons.map(function(m){ var x=fromIso(m); return (x.getMonth()+1)+'/'+x.getDate()+'〜'; });
+    var series=[
+      {c:'#2e8fc4', k:'soto', l:'そとで遊んだ'},
+      {c:'#7fb069', k:'move', l:'体を動かす遊び'},
+      {c:'#7d6bb5', k:'st',   l:'ゲーム等2時間以内'},
+      {c:'#3d4c8f', k:'bed9', l:'9時までに就寝'}
+    ].map(function(s){ return {c:s.c, l:s.l, v:R.map(function(r){ return r[s.k]; })}; });
+    var h='<div class="card"><h4>📈 クラスの推移(直近4週間・%)</h4>'+
+      lineSVG(series,xl)+
+      '<div class="legend2">'+series.map(function(s){ return '<span><i style="background:'+s.c+'"></i>'+s.l+'</span>'; }).join('')+'</div>'+
+      '<div class="a-note">%=その週の「回答があった子ども×日」のうち該当した割合</div></div>';
+    var flags=weekFlags(IDX,kids,mon,todayIso);
+    h+= flags.length
+      ? '<div class="alert"><div class="t">📮 今週のお知らせ(先生だけに表示)</div>'+
+        flags.map(function(f){ return '<div class="frow"><b>'+esc(nameOf(f[0]))+'</b>:'+f[1]+'</div>'; }).join('')+
+        '<div class="a-note">解釈は先生の観察に委ねられます(ひとりを好む子もいます)。</div></div>'
+      : '<div class="card note">📮 今週のお知らせ:現時点で特に気になるサインはありません。</div>';
+    h+='<div class="note">個別の詳しい数値は「一覧」タブで名前をタップしてください。</div>';
+    document.getElementById('out').innerHTML=h;
+  }
+
+  /* ---- 一覧(従来の表+個人カード) ---- */
+  function computeStats(IDX,days,todayIso){
+    var win=[]; for(var i=days-1;i>=0;i--) win.push(addD(todayIso,-i));
+    return IDX.children.map(function(c){
       var recDays=0, sb=[],sw=[],ms=[],mh=[], soto=0, stOver=0, stObs=0, hitori=0;
       win.forEach(function(d){
         var any=false;
-        ['M1','M2','M3','M4','M5','K1','K2','G1OUT'].forEach(function(q){ if(ans(c,d,q)!=null) any=true; });
+        ['M1','M2','M3','M4','M5','K1','K2','G1OUT'].forEach(function(q){ if(ansOf(IDX,c,d,q)!=null) any=true; });
         if(any) recDays++;
-        var b=num(ans(c,d,'M2')), w=num(ans(c,d,'M3'));
+        var b=num(ansOf(IDX,c,d,'M2')), w=num(ansOf(IDX,c,d,'M3'));
         var sch=isWeekday(d);
         if(b!=null&&sch) sb.push(BED_H[b]);
         if(w!=null&&sch) sw.push(WAKE_H[w]);
         if(b!=null&&w!=null) (sch?ms:mh).push((BED_H[b]+WAKE_H[w]+24)/2);
-        var p=num(ans(c,d,'M5a')), k1=num(ans(c,d,'K1')), k2=num(ans(c,d,'K2'));
+        var p=num(ansOf(IDX,c,d,'M5a')), k1=num(ansOf(IDX,c,d,'K1')), k2=num(ansOf(IDX,c,d,'K2'));
         if(p===0||p===2||k1===0||k2===0) soto++;
-        var g=ans(c,d,'M4');
+        var g=ansOf(IDX,c,d,'M4');
         if(+g===1){ stObs++; }
-        else{ var sa=num(ans(c,d,'M4a')); if(sa!=null){ stObs++; if(ST_H[sa]>2) stOver++; } }
+        else{ var sa=num(ansOf(IDX,c,d,'M4a')); if(sa!=null){ stObs++; if(ST_H[sa]>2) stOver++; } }
       });
-      Object.keys(last14).forEach(function(d){
-        if(num(ans(c,d,'K3'))===0) hitori++;
-        if(num(ans(c,d,'M5c'))===0) hitori++;
-      });
+      for(var j=13;j>=0;j--){ var d2=addD(todayIso,-j);
+        if(num(ansOf(IDX,c,d2,'K3'))===0) hitori++;
+        if(num(ansOf(IDX,c,d2,'M5c'))===0) hitori++;
+      }
       var gap=(ms.length&&mh.length)?Math.abs(avg(mh)-avg(ms)):null;
       return { child:c, recDays:recDays, winLen:win.length,
         bed:sb.length?avg(sb):null, wake:sw.length?avg(sw):null,
         gapMin:gap==null?null:Math.round(gap*60),
         soto:soto, stOver:stOver, stObs:stObs, hitori:hitori,
-        last:(lastRec[c]||'').slice(0,10) };
+        last:(IDX.lastRec[c]||'').slice(0,10) };
     });
   }
-  window.__computeStats=computeStats;   /* テスト用 */
+  window.__computeStats2=computeStats;
 
-  var CFG_KEY='kiroku_teacher_cfg';
+  function renderList(){
+    var t=new Date(), todayIso=toIso(t);
+    var st=computeStats(IDX,7,todayIso);
+    var h='<div class="card tblwrap"><h4>📋 一覧(直近7日・名前をタップで個人カード)</h4>'+
+      '<table><tr><th>名前</th><th>記録</th><th>最終記録</th><th>就寝平均<br>(学校日)</th><th>起床平均<br>(学校日)</th><th>睡眠のずれ</th><th>外遊び</th><th>ゲーム等<br>2時間超</th><th>「ひとり」<br>(2週間)</th></tr>';
+    st.forEach(function(s){
+      h+='<tr><td class="l" data-c="'+s.child+'">'+esc(nameOf(s.child))+'</td>'+
+        '<td'+(s.recDays===0?' class="warn"':'')+'>'+s.recDays+'/'+s.winLen+'</td>'+
+        '<td>'+(s.last||'—')+'</td><td>'+fmtT(s.bed)+'</td><td>'+fmtT(s.wake)+'</td>'+
+        '<td'+((s.gapMin!=null&&s.gapMin>60)?' class="warn"':'')+'>'+(s.gapMin==null?'—':s.gapMin+'分')+'</td>'+
+        '<td>'+s.soto+'</td><td>'+(s.stObs?s.stOver+'/'+s.stObs:'—')+'</td>'+
+        '<td'+(s.hitori>=4?' class="warn"':'')+'>'+s.hitori+'回'+(s.hitori>=4?' ⚠':'')+'</td></tr>';
+    });
+    h+='</table></div><div id="kdetail"></div>';
+    document.getElementById('out').innerHTML=h;
+    document.querySelectorAll('td.l').forEach(function(td){
+      td.onclick=function(){ var c=td.getAttribute('data-c');
+        var s=st.filter(function(x){ return x.child===c; })[0];
+        var mon=weekMon(todayIso);
+        var fl=weekFlags(IDX,[c],mon,todayIso).map(function(f){ return '📮 '+f[1]; });
+        document.getElementById('kdetail').innerHTML=
+          '<div class="kcard"><b>'+esc(nameOf(c))+' さんの直近7日</b>(仮名ID:'+c+')<br>'+
+          '記録 '+s.recDays+'/'+s.winLen+'日 / 就寝平均(学校日) '+fmtT(s.bed)+' / 起床平均 '+fmtT(s.wake)+
+          ' / 睡眠のずれ '+(s.gapMin==null?'—':s.gapMin+'分')+'<br>'+
+          '外遊び '+s.soto+'日 / ゲーム等2時間超 '+(s.stObs?s.stOver+'/'+s.stObs+'日':'—')+
+          ' / 「ひとり」'+s.hitori+'回(2週間)'+
+          (fl.length?'<br><span style="color:#c2410c;font-weight:700">'+fl.join(' / ')+'</span>':'')+'</div>';
+      };
+    });
+  }
+
+  /* ---- タブ・設定・読み込み ---- */
+  function setTab(t){ TAB=t;
+    document.querySelectorAll('.tabs button').forEach(function(b){ b.className=(b.getAttribute('data-tab')===t)?'on':''; });
+    if(!IDX) return;
+    if(t==='today') renderToday(); else if(t==='week') renderWeek(); else renderList();
+  }
+  document.querySelectorAll('.tabs button').forEach(function(b){ b.onclick=function(){ setTab(b.getAttribute('data-tab')); }; });
+
+  var CFG_KEY='kiroku_teacher_cfg2';
   var DEFAULT_URL='https://script.google.com/macros/s/AKfycbyXXo8g_ecYM23x6u73osy5hBCts269psRUVU2PDJc6lR4IZpd-2rRMqg6cN9UANZv1bQ/exec';
   var saved={}; try{ saved=JSON.parse(localStorage.getItem(CFG_KEY))||{}; }catch(e){}
   document.getElementById('url').value=saved.url||DEFAULT_URL;
   document.getElementById('tok').value=saved.tok||'';
-  if(saved.days) document.getElementById('days').value=saved.days;
-
+  document.getElementById('cls').value=saved.cls||'';
+  document.getElementById('map').value=saved.map||'';
   document.getElementById('print').onclick=function(){ window.print(); };
+
+  function parseMap(txt){ var m={};
+    String(txt||'').split(/\n/).forEach(function(l){ var p=l.split(/[,、\t]/);
+      if(p.length>=2&&p[0].trim()) m[p[0].trim()]=p[1].trim()+'さん'; });
+    return m; }
+
   document.getElementById('load').onclick=function(){
     var url=document.getElementById('url').value.trim();
     var tok=document.getElementById('tok').value.trim();
-    var days=+document.getElementById('days').value;
-    var msg=document.getElementById('msg'), out=document.getElementById('out');
+    var cls=document.getElementById('cls').value.trim();
+    var map=document.getElementById('map').value;
+    var msg=document.getElementById('msg');
     if(!url||!tok){ msg.textContent='サーバURLとトークンを入れてください'; return; }
-    try{ localStorage.setItem(CFG_KEY, JSON.stringify({url:url,tok:tok,days:days})); }catch(e){}
+    try{ localStorage.setItem(CFG_KEY, JSON.stringify({url:url,tok:tok,cls:cls,map:map})); }catch(e){}
+    MAP=parseMap(map); CLS=cls||'クラス';
+    document.getElementById('clsname').textContent=CLS;
     msg.textContent='読み込み中…';
     fetch(url+'?action=export&token='+encodeURIComponent(tok))
       .then(function(r){ return r.json(); })
       .then(function(j){
         if(!j.ok){ msg.textContent='サーバ応答エラー:'+(j.error||'不明')+'(トークンを確認)'; return; }
-        var t=new Date();
-        var todayIso=t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2);
-        var st=computeStats(j.head, j.rows, days, todayIso);
+        IDX=buildIndex(j.head, j.rows);
         msg.textContent='';
-        if(!st.length){ out.innerHTML='<div class="note">データがまだありません。</div>'; return; }
-        var h='<table><tr><th>仮名ID</th><th>記録日数<br>(直近'+days+'日)</th><th>最終記録</th>'+
-          '<th>就寝平均<br>(学校日)</th><th>起床平均<br>(学校日)</th><th>睡眠のずれ</th>'+
-          '<th>外遊び<br>(日)</th><th>ゲーム等<br>2時間超(日)</th><th>「ひとり」<br>(2週間)</th></tr>';
-        st.forEach(function(s){
-          var gapCell=s.gapMin==null?'—':(s.gapMin+'分');
-          var gapCls=(s.gapMin!=null&&s.gapMin>60)?' class="warn"':'';
-          var hitCls=(s.hitori>=4)?' class="warn"':'';
-          h+='<tr><td class="l">'+s.child+'</td>'+
-            '<td'+(s.recDays===0?' class="warn"':'')+'>'+s.recDays+'/'+s.winLen+'</td>'+
-            '<td>'+(s.last||'—')+'</td>'+
-            '<td>'+fmtT(s.bed)+'</td><td>'+fmtT(s.wake)+'</td>'+
-            '<td'+gapCls+'>'+gapCell+'</td>'+
-            '<td>'+s.soto+'</td><td>'+(s.stObs?s.stOver+'/'+s.stObs:'—')+'</td>'+
-            '<td'+hitCls+'>'+s.hitori+'回'+(s.hitori>=4?' ⚠':'')+'</td></tr>';
-        });
-        h+='</table>';
-        out.innerHTML=h;
+        document.getElementById('tabs').hidden=false;
+        document.getElementById('cfgbox').removeAttribute('open');
+        setTab(TAB);
       })
       .catch(function(e){ msg.textContent='通信できませんでした:'+e.message; });
   };
