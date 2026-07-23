@@ -252,6 +252,15 @@
   .gd.on{ background:#fff6d8; border-color:#f0d98c; }
   .gd i{ display:block; height:18px; font-style:normal; font-size:14px; line-height:18px; }
   .gd em,.gd u{ display:block; font-style:normal; text-decoration:none; font-size:9px; color:#8d887a; }
+  /* バディのふりかえりコメント(ふきだし) */
+  .fbbox{ margin-top:10px; display:flex; gap:8px; align-items:flex-start; }
+  .fbchar{ flex:none; width:54px; text-align:center; }
+  .fbchar small{ display:block; font-size:9px; color:#8d887a; margin-top:-2px; }
+  .fbbubble{ flex:1; background:#fff; border:2px solid #cfe3c2; border-radius:14px; padding:10px 12px;
+    font-size:13px; line-height:1.8; position:relative; }
+  .fbbubble::before{ content:''; position:absolute; left:-12px; top:16px; border:6px solid transparent;
+    border-right-color:#cfe3c2; }
+  .fbbubble div+div{ margin-top:5px; }
   .scorecard{ background:linear-gradient(135deg,#f1f7ec,#e2f0d8); border:2px solid #cfe3c2;
     border-radius:18px; padding:14px; margin-top:14px; display:flex; gap:14px; align-items:center; }
   .scorecard .pt{ font-size:36px; font-weight:700; color:#3f7a34; line-height:1; }
@@ -924,15 +933,79 @@
         ev({t:'coin',n:GOAL_BONUS,why:'goal',week:mon});
         bonusNotes.push('🎯 めあて たっせい！ ボーナス 🪙'+GOAL_BONUS+'コイン もらったよ！'); }
     }
-    /* せんしゅうの けっか(月〜日の100点スコア):週が明けてから1回だけ */
-    const prevMon=weekMonday(addDays(fromIso(mon),-7));
+    /* せんしゅうの けっかのボーナスは自動付与しない(「うけとる」ボタン制。
+       結果とコメントを見てから受け取る体験にする → pendingWeekly/claimWeekly) */
+  }
+
+  /* ====== せんしゅうの けっかボーナス(受け取り制) ====== */
+  function pendingWeekly(){   /* 受け取り待ちがあれば {mon,total,amt} を返す */
+    if(G1) return null;
+    const prevMon=weekMonday(addDays(fromIso(weekMonday(today())),-7));
     S.bonus=S.bonus||{};
-    if(S.bonus[prevMon]==null && weekDates(prevMon).some(d=>completed(d,'m')||completed(d,'k'))){
-      const t=score(prevMon).total, amt=scoreBonusAmt(t);
-      S.bonus[prevMon]=amt; S.coins+=amt;
-      ev({t:'coin',n:amt,why:'week',week:prevMon,score:t});
-      bonusNotes.push('🏆 せんしゅうの けっか '+t+'てん！ ボーナス 🪙'+amt+'コイン もらったよ！');
+    if(S.bonus[prevMon]!=null) return null;   /* 受け取りずみ(旧版の自動付与ぶんも含む) */
+    if(!weekDates(prevMon).some(d=>completed(d,'m')||completed(d,'k'))) return null;
+    const t=score(prevMon).total;
+    return {mon:prevMon, total:t, amt:scoreBonusAmt(t)};
+  }
+  function claimWeekly(){     /* 「うけとる」ボタンで呼ぶ。付与して受け取り記録 */
+    const p=pendingWeekly(); if(!p) return null;
+    S.coins+=p.amt; S.bonus[p.mon]=p.amt;
+    ev({t:'coin',n:p.amt,why:'week',week:p.mon,score:p.total,claimed:1});
+    return p;
+  }
+
+  /* ====== 週のふりかえり分析コメント ======
+     端末内のルールベース分析。ほめる→(前週比)→すいみん実績→アドバイス→応援の
+     順に、その週のデータから文を選ぶ。学年で文体を切替(2〜3年=ひらがな/
+     4〜6年=かんたんな漢字)。生成AI(LLM)への差し替えはこの関数を置き換えればよい */
+  function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return h; }
+  function feedbackFor(mon){
+    const ds=weekDates(mon), sc=score(mon);
+    const rec=sc.rec, N=sc.N;
+    const gap=gapVal(ds);
+    const durA=[]; ds.forEach(d=>{ const b=ans(d,'M2'),w=ans(d,'M3');
+      if(b!=null&&b!=='DK'&&w!=null&&w!=='DK') durA.push(WAKE_H[w]+24-BED_H[b]); });
+    const durAvg=durA.length?avg(durA):null;
+    const st=stOkD(ds), soto=sotoD(ds), move=moveDates(ds);
+    const bed9=cntWeek(mon,'M2',a=>a<=3);
+    const P=(h,k)=>G46?k:h;
+    const L=[];
+    /* ほめる(いちばん よかったところを1つ) */
+    if(rec>=N&&N>=5) L.push(P('まいにち わすれずに きろくできたね！すごい！','毎日 わすれずに 記録できたね！すごい！'));
+    else if(move>=3) L.push(P('からだを うごかした日が '+move+'日も あったね！','体を うごかした日が '+move+'日も あったね！'));
+    else if(soto>=3) L.push(P('そとで あそんだ日が '+soto+'日 あったね！いい ちょうし！','外で あそんだ日が '+soto+'日 あったね！いい調子！'));
+    else if(bed9>=3) L.push(P('9じまでに ねた日が '+bed9+'日！はやねが できているね','9時までに ねた日が '+bed9+'日！早ねが できているね'));
+    else if(st.obs>0&&st.ok>=st.obs) L.push(P('ゲームや どうがと じょうずに つきあえたね','ゲームや 動画と じょうずに つきあえた 1週間だったね'));
+    else if(rec>0) L.push(P('きろくを '+rec+'日 つづけられたね！','記録を '+rec+'日 つづけられたね！'));
+    else L.push(P('こんしゅうは きろくを つけてみよう！','今週は 記録を つけてみよう！'));
+    /* 前の週より 点数が上がっていたら ほめる */
+    const pmon=weekMonday(addDays(fromIso(mon),-7));
+    if(weekDates(pmon).some(d=>completed(d,'m')||completed(d,'k'))){
+      const up=sc.total-score(pmon).total;
+      if(up>=5) L.push(P('てんすうも そのまえの しゅうより '+up+'てん あがったよ！','点数も その前の 週より '+up+'点 あがったよ！'));
     }
+    /* すいみんの じっせき */
+    if(durAvg!=null) L.push(P('すいみんは へいきん '+(Math.round(durAvg*10)/10)+'じかん ねむれたよ','すいみんは 平均 '+(Math.round(durAvg*10)/10)+'時間 ねむれたよ'));
+    /* アドバイス(いちばん のびそうな ところを1つ) */
+    if(gap!=null&&gap>1) L.push(P('休みの日も がっこうの日と おなじくらいの じかんに おきると、からだが らくに なるよ','休みの日も 学校の日と 同じくらいの 時間に おきると、体の リズムが ととのうよ'));
+    else if(durAvg!=null&&durAvg<9) L.push(P('もう すこしだけ はやく ねると、めやすの 9じかんに とどくよ','もう少しだけ 早く ねると、めやすの 9時間に とどくよ'));
+    else if(st.obs-st.ok>=3) L.push(P('ゲーム・どうがの じかんを ちょっとだけ へらしてみない？','ゲーム・動画の 時間を 少しだけ へらせると もっと いいね'));
+    else if(move<=2&&rec>=3) L.push(P('こんしゅうは からだを うごかす あそびも やってみよう！','今週は 体を うごかす あそびも ふやしてみよう！'));
+    else if(rec<N&&rec>0) L.push(P('きろくの 日を ふやすと、じぶんの ことが もっと わかるよ','記録の 日を ふやすと、自分の ことが もっと わかるよ'));
+    /* 応援(週ごとに かわる) */
+    const CHEER=[
+      P('こんしゅうも いっしょに がんばろう！','今週も いっしょに がんばろう！'),
+      P('つぎの 1しゅうかんも たのしみだね！','つぎの 1週間も たのしみだね！'),
+      P('まいにちの きろくが '+charDef(S.buddy).name+'の パワーに なるよ！','毎日の 記録が '+charDef(S.buddy).name+'の パワーに なるよ！'),
+      P('すこしずつで だいじょうぶ。つづけることが いちばん だいじだよ','少しずつで だいじょうぶ。つづけることが 一番 大事だよ')];
+    L.push(CHEER[hashStr(mon)%CHEER.length]);
+    return L;
+  }
+  /* バディが ふきだしで コメントする表示(週間画面・けっか画面で共用) */
+  function fbHtml(mon){
+    return '<div class="fbbox"><div class="fbchar">'+charVisual(S.buddy,buddyStage(),44)+
+      '<small>'+charDef(S.buddy).name+'</small></div>'+
+      '<div class="fbbubble">'+feedbackFor(mon).map(x=>'<div>'+x+'</div>').join('')+'</div></div>';
   }
 
   /* ============ 画面遷移 ============ */
@@ -1206,6 +1279,7 @@
       (pwSetNote?'<div class="catchup">🔑 '+T('ばんごうを おぼえたよ！これで きろくは あんしんだよ')+'</div>':'')+
       (needPwBanner()?'<button class="catchup" id="go-pwset" style="width:100%;text-align:left;border:none;cursor:pointer">🔑 '+T('じぶんの ばんごうを きめてね(タップして せってい)')+'</button>':'')+
       bonusNotes.map(n=>'<div class="catchup" style="background:#fdf3d8;border-color:#ecd88a;color:#8a6516">'+n+'</div>').join('')+
+      (pendingWeekly()?'<button class="catchup" id="go-weekly" style="width:100%;text-align:left;cursor:pointer;background:#fdf3d8;border:2px solid #ecd88a;color:#8a6516;font-weight:700">🏆 '+T('せんしゅうの けっかが でたよ！コメントを 見て ボーナスコインを うけとろう')+'</button>':'')+
       coinbar+
       '<div class="bigbtns">'+big+goalBtn+'</div>'+catchHtml+
       subbtns+
@@ -1214,6 +1288,7 @@
       '<button class="modelink" id="go-breaks">🏖 '+T((S.breaks&&S.breaks.length)?'ながい おやすみ:せっていずみ(みる・かえる)':'なつやすみ など ながい おやすみが つづく ときは ここから せってい')+'</button>';
     document.getElementById('gear').onclick=()=>go('data');
     const pwb=document.getElementById('go-pwset'); if(pwb) pwb.onclick=()=>go('pwset');
+    const gw=document.getElementById('go-weekly'); if(gw) gw.onclick=()=>go('weekly');
     document.getElementById('go-breaks').onclick=()=>go('breaks');
     pwSetNote=false;   /* 完了メッセージは1回だけ表示 */
     bonusNotes=[];     /* ボーナスのお知らせも1回だけ表示(コイン自体は付与済み) */
@@ -1592,13 +1667,16 @@
         '<div><span>🎯 めあて</span><b>'+psc.goalPt+'/20</b></div>'+
         '<div><span>🌱 せいかつしゅうかん</span><b>'+psc.lifePt+'/20</b></div>'+
         (S.bonus&&S.bonus[prevMon]!=null?'<div><span>🪙 ボーナスコイン</span><b>+'+S.bonus[prevMon]+'</b></div>':'')+
-        '</div></div>')
+        '</div></div>'+
+        fbHtml(prevMon)+
+        (pendingWeekly()?'<button class="rewardbtn" id="wk-claim">🪙 ボーナスコインを うけとる！</button>':''))
         :('<div class="card" style="text-align:center;color:#8d887a;font-size:13px">せんしゅうの きろくが たまると<br>ここに 100てんまんてんの てんすうが でるよ</div>'))+
       '<div class="seechip">👀 てんすうは <b>せんしゅう(月〜日)の けっか</b>。げつようびに あたらしく なるよ(きろく60点＋めあて20点＋せいかつ20点)</div>'+
       goalHtml+
       '<div class="backrow"><button class="backbtn" id="back">← ホームへ</button></div>';
     bindWeekSeg();
     ensureWeather(ds);   /* 天気を裏で取得(取れたら表示を更新) */
+    const wc=document.getElementById('wk-claim'); if(wc) wc.onclick=()=>go('weekly');
     document.getElementById('back').onclick=()=>go('home');
   }
   function bindWeekSeg(){
@@ -1606,6 +1684,38 @@
     if(n) n.onclick=()=>renderWeek('now');
     if(h) h.onclick=()=>renderWeek('h');
     if(m) m.onclick=()=>renderWeek('m');
+  }
+
+  /* ============ せんしゅうの けっか(コメント+ボーナス受け取り) ============ */
+  function renderWeekly(){
+    const prevMon=weekMonday(addDays(fromIso(weekMonday(today())),-7));
+    const claimed=(S.bonus&&S.bonus[prevMon]!=null), p=pendingWeekly();
+    if(!claimed && !p){ go('home'); return; }   /* まだ結果がない */
+    const psc=score(prevMon);
+    const d0=fromIso(prevMon), d6=addDays(d0,6);
+    const prange=(d0.getMonth()+1)+'/'+d0.getDate()+'〜'+(d6.getMonth()+1)+'/'+d6.getDate();
+    app.innerHTML=
+      '<h2>🏆 せんしゅうの けっか</h2><div class="date">🗓 '+prange+'(月〜日)</div>'+
+      '<div class="scorecard"><div><div class="pt">'+psc.total+'<small>てん</small></div>'+
+      '<div style="font-size:11px;color:#4f7d3f">100てん まんてん</div></div>'+
+      '<div class="bd"><div><span>📝 きろくできた日</span><b>'+psc.rec+'/'+psc.N+'日</b></div>'+
+      '<div><span>🎯 めあて</span><b>'+psc.goalPt+'/20</b></div>'+
+      '<div><span>🌱 せいかつしゅうかん</span><b>'+psc.lifePt+'/20</b></div></div></div>'+
+      fbHtml(prevMon)+
+      '<div id="claimbox" style="text-align:center;position:relative;margin-top:12px">'+
+      (p?'<button class="rewardbtn" id="claim" style="margin:0">🪙 ボーナス '+p.amt+'コインを うけとる！</button>'
+        :'<div class="coinreward">🪙 ボーナス +'+S.bonus[prevMon]+'<div class="coined">うけとりずみ／いま ぜんぶで <b>'+S.coins+'</b>コイン</div></div>')+
+      '</div>'+
+      '<button class="homebtn" id="back">🏠 ホームへ もどる</button>';
+    document.getElementById('back').onclick=()=>go('home');
+    const cb=document.getElementById('claim');
+    if(cb) cb.onclick=()=>{
+      const r=claimWeekly(); if(!r) return;
+      const box=document.getElementById('claimbox');
+      burst(box,8);
+      box.innerHTML='<div class="coinreward gotstar">🎉 🪙'+r.amt+'コイン うけとったよ！'+
+        '<div class="coined">いま ぜんぶで <b>'+S.coins+'</b>コイン</div></div>';
+    };
   }
 
   /* ============ めあて ============ */
@@ -1983,6 +2093,7 @@
       case 'flow': renderFlow(); break;
       case 'editday': renderEditConfirm(scr.arg); break;
       case 'week': renderWeek(); break;
+      case 'weekly': renderWeekly(); break;
       case 'goal': renderGoal(); break;
       case 'gacha': renderGacha(); break;
       case 'nakama': renderNakama(); break;
