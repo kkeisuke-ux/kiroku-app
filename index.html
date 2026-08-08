@@ -269,6 +269,11 @@
   .scorecard .bd div{ display:flex; justify-content:space-between; gap:8px; }
   .goalcard{ background:#e8f3e4; border-radius:16px; padding:12px 14px; margin-top:12px; color:#2f5c2a; }
   .goalcard b{ font-size:14.5px; }
+  /* けっか表示・めあて選び画面の「せんしゅうの めあて」思い出し行 */
+  .grecall{ background:#efeafa; border-radius:12px; padding:8px 12px; margin-top:8px;
+    font-size:12.5px; color:#514379; line-height:1.55; }
+  .grecall b{ color:var(--meate); }
+  .grecall .gres{ margin-left:4px; font-weight:700; white-space:nowrap; }
   .meter{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
   .meter .m{ width:30px; height:30px; border-radius:50%; background:#fff; border:2px dashed #9cc394;
     display:flex; align-items:center; justify-content:center; font-size:16px; }
@@ -1007,6 +1012,20 @@
       '<small>'+charDef(S.buddy).name+'</small></div>'+
       '<div class="fbbubble">'+feedbackFor(mon).map(x=>'<div>'+x+'</div>').join('')+'</div></div>';
   }
+  /* せんしゅうの めあての中身と結果。てんすうだけだと「なにを めざしていたか」が
+     分からないので、けっか表示と めあて選び画面で思い出せるようにする */
+  function goalRecallHtml(mon){
+    const g=S.goals[mon];
+    if(!g) return '<div class="grecall">🎯 せんしゅうの めあて:きめて いなかったよ</div>';
+    const gd=GOALS.find(x=>x.code===g.code);
+    let res;
+    if(gd.gapGoal){ const ok=gapOK(mon);
+      res= ok===true?'たっせい 🎉' : ok===false?'こんどは 1じかんまでを めざそう' : 'きろくが たりなかったよ'; }
+    else{ const got=gd.judge(mon)||0;
+      res= got>=g.target?'たっせい 🎉' : 'できたのは '+got+'日/'+g.target+'日'; }
+    return '<div class="grecall">🎯 せんしゅうの めあて:<b>'+gd.label+'</b>'+
+      (gd.gapGoal?'':'(週'+g.target+'日)')+'<span class="gres">→ '+res+'</span></div>';
+  }
 
   /* ============ 画面遷移 ============ */
   let scr={name:'home'}, flowState=null, dayShown=null;
@@ -1459,7 +1478,7 @@
       '<div><div class="daychart">'+gl+bars+'</div>'+
       '<div class="stdays">'+['げつ','か','すい','もく','きん','ど','にち'].map((d,i)=>{
         const x=ds?fromIso(ds[i]):null;
-        return '<span class="'+(i>=5?'hd':'')+'">'+d+(x?'<em>'+(x.getMonth()+1)+'/'+x.getDate()+'</em>':'')+'</span>';
+        return '<span class="'+((x?!isSchool(x):i>=5)?'hd':'')+'">'+d+(x?'<em>'+(x.getMonth()+1)+'/'+x.getDate()+'</em>':'')+'</span>';
       }).join('')+'</div></div></div>';
   }
   function renderWeek(mode){
@@ -1538,7 +1557,8 @@
     const soto=ds.map(d=>{const p=ans(d,'M5a'),k1=ans(d,'K1'),k2=ans(d,'K2');
       if(p==null&&k1==null&&k2==null) return null; return (p===0||p===2||k1===0||k2===0)?1:0;});
     const mv=ds.map(d=>{const a=ans(d,'M5'); return a==null||a==='DK'?null:(a===0?1:0);});
-    const hd=(v,i)=>i>=5?'hd':'';
+    /* 休みの日の色は曜日固定でなくisSchool()で判定(長期休み・日別の休み切替を反映) */
+    const hd=(v,i)=>isSchool(fromIso(ds[i]))?'':'hd';
     const bedMode=modeSlotD(ds,'M2',BED), wakeMode=modeSlotD(ds,'M3',WAKE);
     /* 学校の日/休みの日の値を、ラベル列をそろえた2行で表示する */
     const avg2=(rows,note)=>'<div class="avg2">'+
@@ -1642,7 +1662,7 @@
       (wakeMode?'<div class="modeval">いちばん おおかったのは <b>'+wakeMode+'</b></div>':'<div class="modeval">まだ きろくが ないよ</div>')+
       avg2([['🏫 '+T('がっこうの日:'), spNow.sw!=null?T(fmtH(spNow.sw)):'—'],
             ['🏖 '+T('休みの日:'), spNow.hw!=null?T(fmtH(spNow.hw)):'—']], T('(こんしゅうの へいきん)'))+
-      dayChart(wake,v=>(v-5)*24,(v,i)=>'wk2'+(i>=5?' hd':''),null,null,[['6じ',24],['7じ',48],['8じ',72],['9じ',96]],ds)+
+      dayChart(wake,v=>(v-5)*24,(v,i)=>'wk2'+(isSchool(fromIso(ds[i]))?'':' hd'),null,null,[['6じ',24],['7じ',48],['8じ',72],['9じ',96]],ds)+
       '<div class="seechip">👀 いろの うすい ぼう(休みの日)だけ たかく なっていないかな？</div></div>'+
       '<h3>⏳ すいみんじかん</h3><div class="card">'+
       avg2([['📊 '+T('こんしゅうの へいきん:'), durAll.length?fmtDur(avg(durAll)):'—'],
@@ -1658,7 +1678,7 @@
       '<span class="lab">てんき</span>'+ds.map((d,i)=>'<span class="wx" id="wx'+i+'">'+wxEmoji(S.weather[d])+'</span>').join('')+
       '<span class="lab">そとで あそんだ日</span>'+soto.map(v=>'<span class="st'+(v?'':' no')+'">'+(v==null?'・':'⭐')+'</span>').join('')+
       '<span class="lab">からだを うごかす あそびや うんどうを した日</span>'+mv.map(v=>'<span class="st'+(v?'':' no')+'">'+(v==null?'・':'⭐')+'</span>').join('')+
-      '<span class="lab"></span>'+['げつ','か','すい','もく','きん','ど','にち'].map((d,i)=>{const x=fromIso(ds[i]);return '<span class="dy'+(i>=5?' hd':'')+'">'+d+'<em>'+(x.getMonth()+1)+'/'+x.getDate()+'</em></span>';}).join('')+
+      '<span class="lab"></span>'+['げつ','か','すい','もく','きん','ど','にち'].map((d,i)=>{const x=fromIso(ds[i]);return '<span class="dy'+(isSchool(x)?'':' hd')+'">'+d+'<em>'+(x.getMonth()+1)+'/'+x.getDate()+'</em></span>';}).join('')+
       '</div><div class="seechip">👀 あめの日に そとで あそべなくても、なかで からだを うごかせたら ⭐！</div></div>'+
       '<h3>🏆 せんしゅうの けっか('+prange+')</h3>'+
       (prevHas?
@@ -1668,6 +1688,7 @@
         '<div><span>🌱 せいかつしゅうかん</span><b>'+psc.lifePt+'/20</b></div>'+
         (S.bonus&&S.bonus[prevMon]!=null?'<div><span>🪙 ボーナスコイン</span><b>+'+S.bonus[prevMon]+'</b></div>':'')+
         '</div></div>'+
+        goalRecallHtml(prevMon)+
         fbHtml(prevMon)+
         (pendingWeekly()?'<button class="rewardbtn" id="wk-claim">🪙 ボーナスコインを うけとる！</button>':''))
         :('<div class="card" style="text-align:center;color:#8d887a;font-size:13px">せんしゅうの きろくが たまると<br>ここに 100てんまんてんの てんすうが でるよ</div>'))+
@@ -1701,6 +1722,7 @@
       '<div class="bd"><div><span>📝 きろくできた日</span><b>'+psc.rec+'/'+psc.N+'日</b></div>'+
       '<div><span>🎯 めあて</span><b>'+psc.goalPt+'/20</b></div>'+
       '<div><span>🌱 せいかつしゅうかん</span><b>'+psc.lifePt+'/20</b></div></div></div>'+
+      goalRecallHtml(prevMon)+
       fbHtml(prevMon)+
       '<div id="claimbox" style="text-align:center;position:relative;margin-top:12px">'+
       (p?'<button class="rewardbtn" id="claim" style="margin:0">🪙 ボーナス '+p.amt+'コインを うけとる！</button>'
@@ -1732,6 +1754,7 @@
       '<div class="lv"><span class="i">🌳</span>そとで<br>あそんだ日<b>'+(lastSoto||0)+'日</b></div>'+
       '<div class="lv"><span class="i">🏃</span>からだを<br>うごかした日<b>'+(lastMove||0)+'日</b></div>'+
       '</div></div>'+
+      goalRecallHtml(lastMon)+
       (g?('<div class="curgoal">いま えらんでいる めあて:<b>'+GOALS.find(x=>x.code===g.code).label+'</b></div>'):'')+
       '<div class="gpick">🎯 こんしゅう がんばる めあてを<br><b>ひとつ</b> えらんでね<br><span style="font-size:12px">たっせいすると ボーナス 🪙'+GOAL_BONUS+'コイン！</span></div>'+
       '<div class="goalopts" id="gopts"></div>'+
