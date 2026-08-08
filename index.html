@@ -334,6 +334,20 @@
   .a-cta.red{ background:var(--bad); } .a-cta.gray{ background:#6b675c; }
   .evtable{ width:100%; border-collapse:collapse; font-size:10px; }
   .evtable th,.evtable td{ border-bottom:1px solid #eee9dc; padding:3px 4px; text-align:left; }
+  /* データの見方(コードブック・やさしい版) */
+  .guide section{ margin-bottom:12px; }
+  .guide h3{ font-size:13.5px; margin:0 0 6px; border-left:5px solid var(--brand); padding-left:8px; }
+  .guide h4{ font-size:12px; margin:8px 0 4px; }
+  .gtable{ width:100%; border-collapse:collapse; font-size:11px; }
+  .gtable th,.gtable td{ border:1px solid #e3ddc9; padding:4px 6px; text-align:left; vertical-align:top; }
+  .gtable th{ background:#f4f1e4; white-space:nowrap; }
+  .gex{ background:#f6f4ec; border-radius:8px; padding:8px 10px; font-size:11.5px; line-height:1.7; }
+  /* 印刷(おうちの人向けレポート・データの見方):ボタン類と時計を刷らない */
+  @media print{
+    .statusbar,.a-cta,.backbtn,.backrow,.homebtn{ display:none !important; }
+    body{ background:#fff; }
+    .phone{ max-width:none; }
+  }
   input[type=text]{ font:inherit; font-size:16px; border:2px solid #e3ddc9; border-radius:12px; padding:10px 12px; width:100%; box-sizing:border-box; }
 </style>
 
@@ -1844,7 +1858,8 @@
       '<button class="a-cta" id="exc">💾 CSVをダウンロード(端末に保存)</button>'+
       '<button class="a-cta" id="excp">📋 CSVをコピー(貼り付け回収用)</button>'+
       '<button class="a-cta" id="exj">JSONをダウンロード(全イベント)</button>'+
-      '<div class="a-note">列の意味は「データ辞書(コードブック)」を参照。おぼえてない=DK。iPadでは「共有」→AirDropで学生の端末へ直接送るのが最速です。</div></div>'+
+      '<button class="a-cta" id="guide" style="background:var(--brand)">📖 データの見方(表示・印刷・保存)</button>'+
+      '<div class="a-note">CSVの列や数字の意味は「データの見方」で確認できます(子どもにも読める説明・印刷可)。おぼえてない=DK。iPadでは「共有」→AirDropで学生の端末へ直接送るのが最速です。</div></div>'+
       '<div class="a-sec"><h4>⚠️ デモ・初期化(本番の端末では触らない)</h4>'+
       '<button class="a-cta" id="demo">過去14日ぶんのデモデータを生成</button>'+
       '<div class="a-note">画面の見え方を確認するための「架空の」記録を作るボタンです。本物の記録に混ざるため、児童が使う端末では絶対に押さないでください(押してしまった場合は全削除→再セットアップ)。</div>'+
@@ -1907,6 +1922,7 @@
       try{ await navigator.clipboard.writeText(makeCsv()); markExport(); alert('コピーしました。回収用フォームやメモに貼り付けてください'); }
       catch(e){ alert('コピーできませんでした。「ダウンロード」を使ってください'); } };
     document.getElementById('prep').onclick=()=>go('parent');
+    document.getElementById('guide').onclick=()=>go('guide');
     document.getElementById('bk-add').onclick=()=>{
       const a=document.getElementById('bk-a').value, b=document.getElementById('bk-b').value;
       if(!a||!b){ alert('開始日と終了日を選んでください'); return; }
@@ -1986,6 +2002,102 @@
       const err=await changeNumber(nm2, pw);
       if(err){ document.getElementById('pok').disabled=false; document.getElementById('pmsg2').textContent=err; return; }
       pwSetNote=true; go('home'); };
+  }
+
+  /* ============ データの見方(コードブック・やさしい版) ============
+     ⚙️のCSVが何を意味するかを、子どもにも読める言葉で示す画面。
+     印刷(=PDF保存)とHTMLダウンロードに対応。研究用の正本は
+     「データ辞書_コードブック_v1.md」。質問を変えたら両方そろえること */
+  const GUIDE_COLS=[
+    ['child','子どもの ID(あんごう)。なまえの かわり。なまえは ファイルに 入らない'],
+    ['target_date','「どの日の こと」を 答えたか(入力した日では ない)'],
+    ['target_dow','その日の 曜日'],
+    ['session','いつ 答えたか(下の表)'],
+    ['question_id','どの 質問か(下の表)'],
+    ['question_version','質問文の バージョン(ふつうは 1)'],
+    ['answer','答えの 番号。意味は 質問ごとの 表で 読む。DK=「おぼえてない」'],
+    ['latency_sec','質問が 出てから 答えるまでの 秒数'],
+    ['input_at','じっさいに 入力した 日時(日本時間)'],
+  ];
+  const GUIDE_SESS=[
+    ['m','朝(朝の会・休みの日チャレンジ)。「きのうの 夜〜けさ」の こと'],
+    ['k','帰りの会。「きょうの 休み時間」の こと'],
+    ['c','あとから 思い出して 入れた分(かんたん3問)'],
+  ];
+  const GUIDE_QS_M=[
+    ['M1','きょうの からだの ちょうしは？','0=げんき / 1=ちょっと わるい / 2=ケガ・びょうきで うんどう できない'],
+    ['M2','きのうの よる、なんじごろ ねた？','0=8じより前 / 1=8じ / 2=8じはん / 3=9じ / 4=9じはん / 5=10じ / 6=10じはん / 7=11じ / 8=11じより後'],
+    ['M3','けさ、なんじごろ おきた？','0=6じより前 / 1=6じ / 2=6じはん / 3=7じ / 4=7じはん / 5=8じ / 6=8じはん / 7=9じ / 8=9じより後'],
+    ['M3H','きのうの あさは、なんじごろ おきた？(休みの 次の日だけ 出る)','M3と 同じ 番号'],
+    ['ATT','きのうは がっこうに いった？(前の日の 帰りが 未入力の 時だけ 出る)','0=いった(入力わすれ) / 1=おやすみだった'],
+    ['M4','きのう、ゲーム・どうが・テレビ・スマホを つかった？','0=つかった / 1=つかわなかった'],
+    ['M4a','あそびの ために つかった じかんは？','0=あそびでは つかわなかった / 1=30ぷんくらい / 2=1じかんくらい / 3=2じかんくらい / 4=3じかん いじょう'],
+    ['M5','きのう、あせを かく あそびや うんどうを した？','0=した / 1=しなかった'],
+    ['M5a','どこで した？','0=そと / 1=たてものの 中 / 2=りょうほう'],
+    ['M5b','ぜんぶで どれくらいの じかん？','0=30ぷんより みじかい / 1=30ぷんくらい / 2=1じかんくらい / 3=1じかんより ながい'],
+    ['M5c','だれと あそんだ？','0=ひとりで / 1=ともだちと / 2=かぞく・きょうだいと / 3=せんせい・おとなと'],
+    ['M5d','いっしょに あそんだ ともだちは なんにん？','0=1にん / 1=2〜3にん / 2=4にん いじょう'],
+    ['M6','ならいごとや クラブは あった？','0=あった / 1=なかった'],
+    ['M6a','からだを うごかす ならいごと？','0=からだを うごかすもの / 1=それいがい / 2=りょうほう'],
+    ['G1OUT','(1年生だけ)きのう、そとで あそんだ？','0=あそんだ / 1=あそばなかった'],
+  ];
+  const GUIDE_QS_K=[
+    ['K1','なかやすみは そとで あそんだ？','0=そとで あそんだ / 1=なかに いた / 2=なかやすみは なかった'],
+    ['K2','ひるやすみは そとで あそんだ？','0=そとで あそんだ / 1=なかに いた / 2=ひるやすみが なかった'],
+    ['K2a','そとで いちばん ながく なにを した？','0=おにごっこ・はしる / 1=ボール / 2=ゆうぐ・なわとび / 3=そのほか'],
+    ['K2b','なかの どこに いることが おおかった？','0=きょうしつ・ろうか / 1=たいいくかん / 2=としょしつ / 3=そのほか'],
+    ['K2c','なかで いちばん ながく なにを した？','0=おしゃべり / 1=ほん・おえかき / 2=タブレット・べんきょう / 3=うんどう・あそび / 4=そのほか'],
+    ['K3','ひるやすみは、だれと いることが おおかった？','0=ひとり / 1=ともだち / 2=せんせい・おとな'],
+    ['K3a','いっしょに あそんだ ともだちは なんにん？','0=1にん / 1=2〜3にん / 2=4にん いじょう'],
+  ];
+  function guideBody(){
+    const tbl=(head,rows)=>'<table class="gtable"><tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr>'+
+      rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</table>';
+    return '<p style="font-size:12px;margin-top:0">アプリ「まいにち きろく」から 出した CSVファイルの 見方です。'+
+      'CSVは、これまでの 答えが ぜんぶ 入った 表で、<b>1行 = 1つの 答え</b> です。'+
+      'なまえは 入って いません(かわりに あんごうの ID を 使います)。</p>'+
+      '<section><h3>1. たての列の 意味</h3>'+tbl(['列','意味'],GUIDE_COLS)+'</section>'+
+      '<section><h3>2. session(いつ 答えたか)</h3>'+tbl(['コード','意味'],GUIDE_SESS)+'</section>'+
+      '<section><h3>3. 質問(question_id)と 答え(answer)の 番号の 意味</h3>'+
+      '<p style="font-size:11.5px;margin-top:0">answer の 数字は、下の 表で 意味に なおして 読みます。<b>DK=「おぼえてない」</b>です。</p>'+
+      '<h4>🌞 朝に 答える 質問</h4>'+tbl(['番号','質問','答えの 番号の 意味'],GUIDE_QS_M)+
+      '<h4>🏫 帰りの会で 答える 質問</h4>'+tbl(['番号','質問','答えの 番号の 意味'],GUIDE_QS_K)+'</section>'+
+      '<section><h3>4. 読みかたの 例</h3><div class="gex">'+
+      'child=c4f8a2xx / target_date=2026-09-04 / target_dow=金 / session=m / question_id=M2 / answer=3 / latency_sec=2.1 / input_at=2026-09-05 08:21<br>'+
+      '→ ID が c4f8a2xx の 子が、<b>9月4日(金)の 夜</b>の ことを、<b>9月5日の 朝</b>に 答えた。'+
+      'M2(なんじごろ ねた？)の 答えは 3 = <b>9じ</b>。答えるのに 2.1秒 かかった。</div></section>'+
+      '<section><h3>5. だいじな ルール</h3><ul style="margin:0;padding-left:18px;font-size:11.5px">'+
+      '<li>同じ日・同じ質問の 行が 2つ以上 ある時は、<b>input_at が いちばん 新しい 行</b>が ほんとうの 答え(あとから なおした分)</li>'+
+      '<li>時刻は ぜんぶ 日本時間</li>'+
+      '<li>研究用の くわしい 説明(代表値・派生変数)は「データ辞書(コードブック)」を 見てください</li></ul></section>';
+  }
+  function guideDocHtml(){
+    return '<!doctype html><html lang="ja"><head><meta charset="utf-8">'+
+      '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+      '<title>「まいにち きろく」データの見方</title><style>'+
+      'body{font-family:"BIZ UDPGothic","Hiragino Maru Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;color:#33312a;line-height:1.7;max-width:720px;margin:0 auto;padding:20px 16px}'+
+      'h1{font-size:19px;margin:0 0 4px} section{margin:14px 0} h3{font-size:14.5px;border-left:5px solid #4f9d45;padding-left:8px;margin:0 0 6px} h4{font-size:12.5px;margin:8px 0 4px}'+
+      '.gtable{width:100%;border-collapse:collapse;font-size:11px}'+
+      '.gtable th,.gtable td{border:1px solid #cfc9b8;padding:4px 6px;text-align:left;vertical-align:top}'+
+      '.gtable th{background:#f0ecdd;white-space:nowrap}'+
+      '.gex{background:#f6f4ec;border-radius:8px;padding:8px 10px;font-size:11.5px}'+
+      '.noprint{position:sticky;top:8px;float:right;border:none;border-radius:10px;padding:8px 14px;background:#2e8fc4;color:#fff;font-weight:700;cursor:pointer}'+
+      '@media print{.noprint{display:none}} @page{margin:14mm}'+
+      '</style></head><body>'+
+      '<button class="noprint" onclick="window.print()">🖨 いんさつ / PDFほぞん</button>'+
+      '<h1>📖 「まいにち きろく」データの見方</h1>'+
+      '<div style="font-size:11px;color:#8d887a">作成日 '+iso(today())+' / アプリの ⚙️「データの見方」から いつでも 保存できます</div>'+
+      guideBody()+'</body></html>';
+  }
+  function renderGuide(){
+    app.innerHTML='<div class="adult guide"><h2>📖 データの見方</h2>'+
+      '<div class="a-sec">'+guideBody()+'</div>'+
+      '<button class="a-cta" id="gprint">🖨 印刷する(PDFに保存)</button>'+
+      '<button class="a-cta" id="gdl">💾 ファイルに保存(HTML・あとで開ける)</button>'+
+      '<button class="a-cta gray" id="back">← 戻る</button></div>';
+    document.getElementById('back').onclick=()=>go('data');
+    document.getElementById('gprint').onclick=()=>window.print();
+    document.getElementById('gdl').onclick=()=>dl('まいにちきろく_データの見方.html',guideDocHtml(),'text/html');
   }
 
   /* ============ おうちの人向けレポート(大人向け・⚙️から開く) ============ */
@@ -2122,6 +2234,7 @@
       case 'nakama': renderNakama(); break;
       case 'shop': renderShop(); break;
       case 'data': renderData(); break;
+      case 'guide': renderGuide(); break;
       default: renderHome();
     }
   }
