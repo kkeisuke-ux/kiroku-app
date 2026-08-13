@@ -733,7 +733,6 @@
       {id:'M2',illust:'futon',ic:'night',kind:'rail-night',q:'きのう(<em>'+dow+'</em>)の よる、なんじごろ ねた？',opts:BED,forget:true},
       {id:'M3',illust:'sunrise',ic:'morning',kind:'rail-morning',q:'きょうの あさ、なんじごろ おきた？',opts:WAKE,forget:true},
     ];
-    if(extra.holWake) f.push({id:'M3H',icon:'⏰',kind:'rail-morning2',q:'きのうの あさは、なんじごろ おきた？',opts:WAKE,forget:true});
     const CA=holiday?null:CTX_AFTER, CA2=holiday?null:CTX_AFTER2;  /* きのうが学校日なら「学校のあと」を明示 */
     f.push(
       {id:'M4',icon:'📺',ctx:CA,q: holiday?'きのう、ゲーム・どうが・テレビ・スマホを つかった？':'きのう、がっこうが おわってから、ゲーム・どうが・テレビ・スマホを つかった？',
@@ -892,9 +891,8 @@
     const t=today(), ti=iso(t), school=isSchool(t);
     const y=addDays(t,-1), yi=iso(y);
     const p={school, morning:!completed(ti,'m'), kaeri:school&&!completed(ti,'k'),
-      att:false, holWake:false, catch:[], goalNeeded:false};
+      att:false, catch:[], goalNeeded:false};
     if(isSchool(y)&&!completed(yi,'k')&&school) p.att=(ans(yi,'ATT')==null);
-    if(!isSchool(y)&&!completed(yi,'m')) p.holWake=true;
     for(let n=1;n<=2;n++){ const d=iso(addDays(t,-n));
       if(!completed(d,'m')&&!completed(d,'c')) p.catch.push(d); }
     const wk=weekMonday(t);
@@ -1329,7 +1327,7 @@
       const y=addDays(t,-1);
       /* 「きのう」の質問の言い回しは、きょうではなく「きのう」が学校日だったかで決める */
       if(G1){ startFlow(asaG1(!isSchool(y)),'m',ti,p.school?'あさ':'休みの日',p.school?'':'b-hol',1); }
-      else startFlow(asaFlow(DOWJ[y.getDay()],!isSchool(y),{att:p.att,holWake:p.holWake}),'m',ti,
+      else startFlow(asaFlow(DOWJ[y.getDay()],!isSchool(y),{att:p.att}),'m',ti,
         p.school?'あさ':'休みの日チャレンジ',p.school?'':'b-hol',p.school?1:2); };
     const k=document.getElementById('go-kaeri');
     if(k) k.onclick=()=>startFlow(G1?KAERI_G1:KAERI_FLOW,'k',ti,'かえり','b-kaeri',1);
@@ -2028,7 +2026,7 @@
     ['M1','きょうの からだの ちょうしは？','0=げんき / 1=ちょっと わるい / 2=ケガ・びょうきで うんどう できない'],
     ['M2','きのうの よる、なんじごろ ねた？','0=8じより前 / 1=8じ / 2=8じはん / 3=9じ / 4=9じはん / 5=10じ / 6=10じはん / 7=11じ / 8=11じより後'],
     ['M3','けさ、なんじごろ おきた？','0=6じより前 / 1=6じ / 2=6じはん / 3=7じ / 4=7じはん / 5=8じ / 6=8じはん / 7=9じ / 8=9じより後'],
-    ['M3H','きのうの あさは、なんじごろ おきた？(休みの 次の日だけ 出る)','M3と 同じ 番号'],
+    ['M3H','きのうの あさは、なんじごろ おきた？(今は 出ない。むかしの きろくにだけ ある)','M3と 同じ 番号'],
     ['ATT','きのうは がっこうに いった？(前の日の 帰りが 未入力の 時だけ 出る)','0=いった(入力わすれ) / 1=おやすみだった'],
     ['M4','きのう、ゲーム・どうが・テレビ・スマホを つかった？','0=つかった / 1=つかわなかった'],
     ['M4a','あそびの ために つかった じかんは？','0=あそびでは つかわなかった / 1=30ぷんくらい / 2=1じかんくらい / 3=2じかんくらい / 4=3じかん いじょう'],
