@@ -274,6 +274,21 @@
     font-size:12.5px; color:#514379; line-height:1.55; }
   .grecall b{ color:var(--meate); }
   .grecall .gres{ margin-left:4px; font-weight:700; white-space:nowrap; }
+  /* その日のきろくを見る画面(カレンダーの日タップ→ふりかえり) */
+  .dvhd{ background:#fff; border:2px solid #e3ddc9; border-radius:16px; padding:10px 12px; margin-top:10px; }
+  .dvhd .d{ font-size:19px; font-weight:700; }
+  .dvhd .sub{ font-size:11.5px; color:#8d887a; margin-top:3px; }
+  .dvsec{ background:#fff; border:2px solid #e3ddc9; border-radius:16px; padding:10px 12px; margin-top:10px; }
+  .dvsec h4{ font-size:13.5px; margin:0 0 4px; color:#4f7d3f; }
+  .dvrow{ display:flex; gap:8px; align-items:baseline; font-size:14px; padding:5px 0; border-top:1px dashed #ece7d8; }
+  .dvsec .dvrow:first-of-type{ border-top:none; }
+  .dvrow .k{ flex:none; width:8.6em; font-size:12px; color:#8d887a; }
+  .dvrow .v{ flex:1; font-weight:700; }
+  .dvrow .v.dk{ color:#a9a493; font-weight:400; }
+  .dvbig{ background:#f1f7ec; border-radius:12px; padding:8px 12px; margin-top:8px;
+    font-size:14px; color:#3f7a34; font-weight:700; }
+  .dvnone{ text-align:center; color:#8d887a; font-size:13.5px; line-height:1.9; padding:16px 6px; }
+  .app.g1 .dvrow{ font-size:16px; } .app.g1 .dvrow .k{ font-size:12.5px; width:8.8em; }
   .meter{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
   .meter .m{ width:30px; height:30px; border-radius:50%; background:#fff; border:2px dashed #9cc394;
     display:flex; align-items:center; justify-content:center; font-size:16px; }
@@ -1175,19 +1190,136 @@
       '<span>📅 '+title+'</span>'+
       '<button class="calnav" id="cal-next"'+(calOff>=0?' disabled':'')+'>つぎの月 ▶</button></div>'+
       '<div class="calgrid">'+head+cells+'</div>'+
-      '<div class="calleg">🟩 みどりの日=きろくした日 ・ 点線の日=まだの日<br>🌞あさ ・ 🏫かえり ・ 🏅休みの日 ／ 👆日を タップして きろく・なおす</div></div>';
+      '<div class="calleg">🟩 みどりの日=きろくした日 ・ 点線の日=まだの日<br>🌞あさ ・ 🏫かえり ・ 🏅休みの日 ／ 👆みどりの日を タップ=その日の きろくを 見る</div></div>';
   }
   /* カレンダーの日タップ → 確認画面をはさんで その日の きろく/なおし。
      月おくりは カレンダー部分だけ描き直す(画面のスクロール位置を保つ) */
   function bindCalendar(){
     app.querySelectorAll('[data-cal]').forEach(el=>{ el.style.cursor='pointer';
-      el.onclick=()=>go('editday',el.dataset.cal); });
+      /* きろくのある日=その日のきろくを見る画面へ。まだの日=そのまま入力へ */
+      el.onclick=()=>{ const d=el.dataset.cal;
+        go((completed(d,'m')||completed(d,'k'))?'dayview':'editday', d); }; });
     const refreshCal=()=>{ const w=app.querySelector('.calwrap');
       if(w){ w.outerHTML=monthCalendar(); bindCalendar(); } };
     const cp=document.getElementById('cal-prev');
     if(cp) cp.onclick=()=>{ if(calOff>-24){ calOff--; refreshCal(); } };
     const cn=document.getElementById('cal-next');
     if(cn) cn.onclick=()=>{ if(calOff<0){ calOff++; refreshCal(); } };
+  }
+  /* ============ その日の きろくを 見る画面(ふりかえり) ============
+     カレンダーで「きろくのある日」をタップした時に開く。子ども自身が
+     その日 なにを 記録したかを読んで ふりかえれるようにするのが目的。
+     なおしたい時は この画面から なおしフロー(editday)へ進む。
+     ラベルはデータ辞書(GUIDE_QS_M/K)と同じ意味で、子ども向けの言い方にそろえる。
+     質問の選択肢を変えたら、ここのラベルも合わせること */
+  const DVLBL={
+    M1:['😊 げんき','😕 ちょっと わるい','🤕 ケガ・びょうきで うんどう できなかった'],
+    M4:['👀 つかった','🙅 つかわなかった'],
+    M4a:['あそびでは つかわなかった','30ぷん くらい','1じかん くらい','2じかん くらい','3じかん いじょう'],
+    M5:['💪 した','🙅 しなかった'],
+    M5a:['🌳 そと','🏠 たてものの なか','🌳🏠 そとと なかの りょうほう'],
+    M5b:['30ぷんより みじかい','30ぷん くらい','1じかん くらい','1じかんより ながい'],
+    M5c:['🧍 ひとりで','👫 ともだちと','👨‍👩‍👧 かぞく・きょうだいと','🧑‍🏫 せんせい・おとなと'],
+    M5d:['1にん','2〜3にん','4にん いじょう'],
+    M6:['⭕ あった','🙅 なかった'],
+    M6a:['⚽ からだを うごかす ならいごと','🎹 うんどうでは ない ならいごと','🔁 りょうほう'],
+    G1OUT:['🌳 あそんだ','🏠 あそばなかった'],
+    K1:['🌳 そとで あそんだ','🏫 なかに いた','🚫 なかやすみは なかった'],
+    K2:['🌳 そとで あそんだ','🏫 なかに いた','🚫 ひるやすみが なかった'],
+    K2a:['🏃 おにごっこ・はしる','⚽ ボール','🤸 ゆうぐ・なわとび','✨ そのほか'],
+    K2b:['🏫 きょうしつ・ろうか','🤸 たいいくかん','📚 としょしつ','✨ そのほか'],
+    K2c:['💬 おしゃべり','🎨 ほん・おえかき','📱 タブレット・べんきょう','🤸 うんどう・あそび','✨ そのほか'],
+    K3:['🧍 ひとり','👫 ともだち','🧑‍🏫 せんせい・おとな'],
+    K3a:['1にん','2〜3にん','4にん いじょう']
+  };
+  const DK_TXT='？ おぼえてない';
+  function ansLabel(di,qid){
+    const a=ans(di,qid);
+    if(a==null) return null;
+    if(a==='DK') return DK_TXT;
+    if(qid==='M2') return BED[a] ? BED[a][0]+' '+BED[a][1] : String(a);
+    if(qid==='M3'||qid==='M3H') return WAKE[a] ? WAKE[a][0]+' '+WAKE[a][1] : String(a);
+    const t=DVLBL[qid];
+    return (t&&t[a]!=null) ? t[a] : String(a);
+  }
+  /* すいみん時間を「9じかん30ぷん」の形にする */
+  function fmtDurH(h){
+    const hh=Math.floor(h+1e-6), mm=Math.round((h-hh)*60);
+    return hh+'じかん'+(mm?mm+'ぷん':'');
+  }
+  function dayDur(di){
+    const b=ans(di,'M2'), w=ans(di,'M3');
+    if(b==null||b==='DK'||w==null||w==='DK') return null;
+    return WAKE_H[w]+24-BED_H[b];
+  }
+  /* その日のふりかえりコメント(端末内ルールベース。週のfeedbackForと同じ考え方) */
+  function dayComment(di){
+    const out=[], dur=dayDur(di);
+    const moved=ans(di,'M5')===0||ans(di,'G1OUT')===0;
+    const soto=ans(di,'M5a')===0||ans(di,'M5a')===2||ans(di,'K1')===0||ans(di,'K2')===0||ans(di,'G1OUT')===0;
+    if(moved&&soto) out.push('からだを うごかして、そとでも あそべた日だね！さいこう👏');
+    else if(moved) out.push('からだを うごかせた日だね！いいね👍');
+    else if(soto) out.push('そとで あそべた日だね🌳');
+    if(dur!=null){
+      out.push('この日は やく '+fmtDurH(dur)+' ねたよ。'+
+        (dur>=9?'ぐっすり ねられたね😴':(dur>=8?'いい かんじ🙆':'すこし みじかめかも。はやめに ねてみよう🌙')));
+    }
+    const st=ans(di,'M4a');
+    if(out.length<3&&st!=null&&st!=='DK'&&st>=3) out.push('ゲーム・どうがは ながめだったね。つぎは そとあそびも いれてみよう🎮');
+    if(!out.length) out.push('この日の きろくが のこっているよ。つづけているのが すごい✨');
+    return out.slice(0,3);
+  }
+  /* その日のめあて(その週に決めていためあて)が達成できた日かを見る */
+  function dayGoalHtml(di){
+    const g=S.goals[weekMonday(fromIso(di))];
+    if(!g) return '';
+    const gd=GOALS.find(x=>x.code===g.code);
+    if(!gd||!gd.dayOK) return '';   /* ずれのめあて(gapGoal)は1日では判定できない */
+    return gd.dayOK(di)
+      ? '<div class="dvbig">🎯 めあて「'+gd.label+'」ができた日だよ！🎉</div>'
+      : '<div class="grecall">🎯 この週の めあて:<b>'+gd.label+'</b><span class="gres">→ この日は できなかったよ</span></div>';
+  }
+  function renderDayView(di){
+    const x=fromIso(di), sch=isSchool(x), tISO=iso(today());
+    const dl=(x.getMonth()+1)+'がつ'+x.getDate()+'にち('+DOW1[x.getDay()]+')';
+    const hasM=completed(di,'m'), hasK=completed(di,'k');
+    const row=(k,qid)=>{ const v=ansLabel(di,qid); return v==null?'':
+      '<div class="dvrow"><span class="k">'+k+'</span><span class="v'+(v===DK_TXT?' dk':'')+'">'+v+'</span></div>'; };
+    const sec=(t,body)=> body ? '<div class="dvsec"><h4>'+t+'</h4>'+body+'</div>' : '';
+
+    const dur=dayDur(di);
+    const sleep=row('ねた じかん','M2')+row('おきた じかん','M3')+row('まえの日の あさ','M3H')+
+      (dur!=null?'<div class="dvbig">😴 ぜんぶで やく '+fmtDurH(dur)+' ねたよ</div>':'');
+    const move=row('うんどう・あそび','M5')+row('どこで','M5a')+row('どれくらい','M5b')+
+      row('だれと','M5c')+row('ともだちの 人数','M5d')+row('そとで あそんだ','G1OUT');
+    const media=row('つかった？','M4')+row('あそびの じかん','M4a');
+    const yasumi=row('なかやすみ','K1')+row('ひるやすみ','K2')+row('そとで したこと','K2a')+
+      row('なかで いた ところ','K2b')+row('なかで したこと','K2c')+
+      row('だれと いた','K3')+row('ともだちの 人数','K3a');
+    const other=row('からだの ちょうし','M1')+row('ならいごと・クラブ','M6')+row('どんな ならいごと','M6a');
+
+    const body=sec('🌙 ねる・おきる',sleep)+sec('🏃 からだを うごかす あそび',move)+
+      sec('🎮 ゲーム・どうが・テレビ・スマホ',media)+sec('🏫 学校の やすみじかん',yasumi)+
+      sec('🌞 そのほか',other);
+
+    const sub=(sch?'🏫 学校が あった日':'🏅 おやすみの日')+
+      (hasM||hasK ? ' ／ きろく: '+(hasM?'🌞あさ ':'')+(hasK?'🏫かえり':'') : '');
+
+    app.className='app'+(G1?' g1':'');
+    app.innerHTML=
+      '<div class="sess-head"><span class="badge b-hol">その日の きろく</span></div>'+
+      '<div class="dvhd"><div class="d">📅 '+dl+(di===tISO?'（きょう）':'')+'</div>'+
+      '<div class="sub">'+sub+'</div></div>'+
+      (body ? body+dayGoalHtml(di)+
+        '<div class="fbbox"><div class="fbchar">'+charVisual(S.buddy,buddyStage(),44)+
+        '<small>'+charDef(S.buddy).name+'</small></div>'+
+        '<div class="fbbubble">'+dayComment(di).map(t=>'<div>'+t+'</div>').join('')+'</div></div>'
+        : '<div class="dvsec"><div class="dvnone">この日の きろくは まだ ないよ。<br>したの ボタンから 入れられるよ！</div></div>')+
+      '<div class="opts" style="margin-top:14px">'+
+      '<button class="opt" id="dv-edit"><span class="e">✏️</span><span>'+(body?'この日の きろくを なおす':'この日の きろくを 入れる')+'</span></button></div>'+
+      '<div class="backrow"><button class="backbtn" id="back">← もどる</button></div>';
+    document.getElementById('dv-edit').onclick=()=>go('editday',di);
+    document.getElementById('back').onclick=()=>go('home');
   }
   /* 過去日をなおす前の確認画面:あいまいな記憶での入れ直し(ごほうび目当て)を防ぐ。
      ・「おもいだせる ことだけ なおす」を先に約束させる
@@ -1219,8 +1351,9 @@
       '<button class="opt forget" id="ed-no">おもいだせないから やめておく</button></div>'+
       '<div class="backrow"><button class="backbtn" id="back">← ホームへ もどる</button></div>';
     document.getElementById('ed-go').onclick=()=>startFlow(editDayFlow(di),'c',di,'その日の きろく','b-hol',canEarn?1:0);
-    document.getElementById('ed-no').onclick=()=>go('home');
-    document.getElementById('back').onclick=()=>go('home');
+    const backTo=(completed(di,'m')||completed(di,'k'))?()=>go('dayview',di):()=>go('home');
+    document.getElementById('ed-no').onclick=backTo;
+    document.getElementById('back').onclick=backTo;
   }
   /* 過去/今日の1日をまるごと入れ直すフロー(全学年)。「この日は 学校が あった？」から始まる */
   function editDayFlow(di){
@@ -2224,6 +2357,7 @@
       case 'breaks': renderBreaks(); break;
       case 'parent': renderParent(); break;
       case 'flow': renderFlow(); break;
+      case 'dayview': renderDayView(scr.arg); break;
       case 'editday': renderEditConfirm(scr.arg); break;
       case 'week': renderWeek(); break;
       case 'weekly': renderWeekly(); break;
