@@ -1,5 +1,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- アプリの版。更新するたびに必ずこの値を変える(自動更新の判定に使う) -->
+<meta name="app-ver" content="2026-09-13-1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="きろく">
@@ -1106,12 +1108,49 @@
   /* ============ 画面遷移 ============ */
   let scr={name:'home'}, flowState=null, dayShown=null;
   function go(name,arg){ if(name!==scr.name) calOff=0; scr={name,arg}; render(); }   /* 画面を移ったらカレンダーは今月へ */
+  /* ====== アプリの じどう こうしん ======
+     このアプリは1枚のHTMLなので、新しい版を出しても、開きっぱなしの端末は
+     読み直すまで古いままになる。学校のタブレットは何日も開いたままのことがあるため、
+     閉じなくても切り替わるようにする。
+     しくみ：サーバ上のファイルの先頭だけを取り、<meta name="app-ver"> を今の版と
+     くらべる。ちがっていれば読み直す。**回答の途中(flow)では絶対に読み直さない**
+     （入力が消えてしまうため）。途中だった場合は、ホームに戻った時点で切り替える。 */
+  const APP_VER=(document.querySelector('meta[name="app-ver"]')||{}).content||'';
+  let newVer=null, lastUpdCheck=0;
+  function updNoteShown(){ try{ return sessionStorage.getItem('kiroku_updnote'); }catch(e){ return null; } }
+  async function checkUpdate(){
+    if(!APP_VER||!navigator.onLine) return;
+    const now=Date.now();
+    if(now-lastUpdCheck<60000) return;        /* 1分に1回まで(通信を使いすぎない) */
+    lastUpdCheck=now;
+    try{
+      const r=await fetch(location.pathname+'?v='+now,{cache:'no-store',headers:{Range:'bytes=0-3000'}});
+      if(!r.ok&&r.status!==206) return;
+      const m=(await r.text()).match(/name="app-ver" content="([^"]+)"/);
+      if(!m) return;
+      if(m[1]===APP_VER){ newVer=null; return; }
+      newVer=m[1]; applyUpdate();
+    }catch(e){}
+  }
+  function applyUpdate(){
+    if(!newVer) return;
+    if(scr.name==='flow') return;             /* 回答の途中は、終わるまで待つ */
+    try{
+      if(sessionStorage.getItem('kiroku_upd')===newVer) return;   /* 同じ版で読み直しを繰り返さない */
+      sessionStorage.setItem('kiroku_upd',newVer);
+      sessionStorage.setItem('kiroku_updnote','1');               /* 読み直した後に お知らせを1回だけ出す */
+    }catch(e){}
+    location.replace(location.pathname+'?v='+encodeURIComponent(newVer)+location.hash);
+  }
+
   function tick(){ document.getElementById('sb-time').textContent=new Date().toTimeString().slice(0,5);
     document.getElementById('sb-day').textContent=DOWJ[today().getDay()];
     /* 開きっぱなしの端末で日付が変わったら描き直す(回答の途中は除く)。
        これが無いと前日に描画した「あさ・かえり」ボタンが、長期休み中や
        休日になっても残り続ける(iPadでページを開いたまま日をまたぐ運用) */
-    if(dayShown && dayShown!==iso(today()) && scr.name!=='flow') render(); }
+    if(dayShown && dayShown!==iso(today()) && scr.name!=='flow') render();
+    applyUpdate();          /* 回答の途中で見つけた更新を、終わったあとに反映する */
+    if(Math.random()<0.06) checkUpdate(); }   /* 30秒ごとの tick のうち、ならして10分に1回ほど */
   setInterval(tick,30000);
 
   /* ============ フロー実行(回答を保存) ============ */
@@ -1529,6 +1568,7 @@
       (needPwBanner()?'<button class="catchup" id="go-pwset" style="width:100%;text-align:left;border:none;cursor:pointer">🔑 '+T('じぶんの ばんごうを きめてね(タップして せってい)')+'</button>':'')+
       bonusNotes.map(n=>'<div class="catchup" style="background:#fdf3d8;border-color:#ecd88a;color:#8a6516">'+n+'</div>').join('')+
       (pendingWeekly()?'<button class="catchup" id="go-weekly" style="width:100%;text-align:left;cursor:pointer;background:#fdf3d8;border:2px solid #ecd88a;color:#8a6516;font-weight:700">🏆 '+T('せんしゅうの けっかが でたよ！コメントを 見て ボーナスコインを うけとろう')+'</button>':'')+
+      (updNoteShown()?'<div class="catchup" style="background:#e7f3ff;border-color:#a7cdf0;color:#1b5e8a">✨ '+T('アプリを さいしんに したよ！')+'</div>':'')+
       streakbar+coinbar+
       '<div class="bigbtns">'+big+goalBtn+'</div>'+catchHtml+
       subbtns+
@@ -1541,6 +1581,7 @@
     document.getElementById('go-breaks').onclick=()=>go('breaks');
     pwSetNote=false;   /* 完了メッセージは1回だけ表示 */
     bonusNotes=[];     /* ボーナスのお知らせも1回だけ表示(コイン自体は付与済み) */
+    try{ sessionStorage.removeItem('kiroku_updnote'); }catch(e){}   /* 更新のお知らせも1回だけ */
     document.getElementById('go-asa').onclick=()=>{
       const y=addDays(t,-1);
       /* 「きのう」の質問の言い回しは、きょうではなく「きのう」が学校日だったかで決める */
@@ -2468,8 +2509,9 @@
   render();
   restoreFromMirror();   /* localStorage消失時はミラーから自動復元して再描画 */
   /* 電波が戻った時・アプリに戻ってきた時に未送信分を自動再送 */
-  window.addEventListener('online', ()=>{ syncNow(); });
-  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ syncNow(); tick(); } });
+  window.addEventListener('online', ()=>{ syncNow(); checkUpdate(); });
+  setTimeout(()=>checkUpdate(), 8000);   /* 起動直後にも1回。開きっぱなしで日をまたいだ端末を拾う */
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ syncNow(); tick(); checkUpdate(); } });
   /* 画面の左よりから右へスワイプ=「← もどる」ボタンと同じ(iPhone/iPadの操作感)。
      開始ゾーンは左120px:iOSは左端〜30px程度をOSの「戻る」ジェスチャに取るため、
      40pxだと実質反応しない。広げることでSafari・ホーム画面アプリの両方で効く */
