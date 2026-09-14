@@ -1,7 +1,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- アプリの版。更新するたびに必ずこの値を変える(自動更新の判定に使う) -->
-<meta name="app-ver" content="2026-09-15-1">
+<meta name="app-ver" content="2026-09-15-2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="きろく">
@@ -163,6 +163,9 @@
   .cal-d.done{ background:#e9f5df; border-color:#a8cf96; }
   .cal-d.done .cal-n{ color:#3f6b35; font-weight:700; }
   .cal-d.miss{ background:#fff; border-style:dashed; border-color:#d8d2c0; }
+  /* きろくはしたが、その日のデータがまだ そろっていない日(うすい みどり) */
+  .cal-d.part{ background:#f6fbf1; border-color:#cfe4c3; border-style:dashed; }
+  .cal-d.part .cal-n{ color:#6f8a63; font-weight:700; }
   .cal-d.today{ outline:2px solid var(--asa); }
   .cal-d.fut{ opacity:.4; }
   .cal-n{ font-size:9px; color:#8d887a; line-height:1; }
@@ -287,6 +290,9 @@
   .dvrow .k{ flex:none; width:8.6em; font-size:12px; color:#8d887a; }
   .dvrow .v{ flex:1; font-weight:700; }
   .dvrow .v.dk{ color:#a9a493; font-weight:400; }
+  .dvrow .v.none{ color:#b9b3a1; font-weight:400; }   /* まだ入れていない項目 */
+  .dvnote{ margin-top:8px; background:#fdf3d8; border:1px solid #ecd88a; border-radius:8px;
+           padding:8px 10px; font-size:12.5px; line-height:1.7; color:#8a6516; }
   .dvbig{ background:#f1f7ec; border-radius:12px; padding:8px 12px; margin-top:8px;
     font-size:14px; color:#3f7a34; font-weight:700; }
   .dvnone{ text-align:center; color:#8d887a; font-size:13.5px; line-height:1.9; padding:16px 6px; }
@@ -1318,7 +1324,10 @@
       if(!fut){ if(sch){ if(completed(di,'m')) s+='🌞'; if(completed(di,'k')) s+='🏫'; }
         else { if(completed(di,'m')) s+='🏅'; } }
       const done=!fut&&(completed(di,'m')||completed(di,'k'));   /* きろくした日(朝か帰りのどちらかでも) */
-      cells+='<div class="cal-d'+(di===tISO?' today':'')+(fut?' fut':(done?' done':' miss'))+(dd.getDay()===0?' sun':(dd.getDay()===6?' sat':''))+'"'+
+      const full=done&&dayFull(di);                              /* データが そろった日 */
+      if(done&&!full) s+='…';                                    /* まだ 入っていない ものが ある */
+      const st=fut?' fut':(done?(full?' done':' part'):' miss');
+      cells+='<div class="cal-d'+(di===tISO?' today':'')+st+(dd.getDay()===0?' sun':(dd.getDay()===6?' sat':''))+'"'+
         (fut?'':' data-cal="'+di+'"')+'>'+
         '<span class="cal-n">'+dn+'</span><span class="cal-s">'+s+'</span></div>';
     }
@@ -1329,7 +1338,8 @@
       '<span>📅 '+title+'</span>'+
       '<button class="calnav" id="cal-next"'+(calOff>=0?' disabled':'')+'>つぎの月 ▶</button></div>'+
       '<div class="calgrid">'+head+cells+'</div>'+
-      '<div class="calleg">🟩 みどりの日=きろくした日 ・ 点線の日=まだの日<br>🌞あさ ・ 🏫かえり ・ 🏅休みの日 ／ 👆みどりの日を タップ=その日の きろくを 見る</div></div>';
+      '<div class="calleg">🟩 こい みどり=データが そろった日 ・ うすい みどり(…)=きろくしたけど まだ 入っていない ものが ある日 ・ 点線の日=まだの日'+
+      '<br>🌞あさ ・ 🏫かえり ・ 🏅休みの日 ／ 👆みどりの日を タップ=その日の きろくを 見る</div></div>';
   }
   /* カレンダーの日タップ → 確認画面をはさんで その日の きろく/なおし。
      月おくりは カレンダー部分だけ描き直す(画面のスクロール位置を保つ) */
@@ -1372,6 +1382,31 @@
     K3a:['1にん','2〜3にん','4にん いじょう']
   };
   const DK_TXT='？ おぼえてない';
+  /* その日の「活動」(スクリーンタイム・うんどう)は、つぎの日の朝の記録で入る。
+     だから「きろくした日」と「データがそろった日」は別もの。ここで区別する。 */
+  /* その日の活動(そとあそび・ゲーム)が入っているか。1年生はG1OUTだけを聞く */
+  function hasAct(di){
+    return G1 ? ans(di,'G1OUT')!=null
+              : (ans(di,'M4')!=null && ans(di,'M5')!=null);
+  }
+  function dayFull(di){
+    if(!completed(di,'m')) return false;                            /* その日の あさ */
+    if(!hasAct(di)) return false;                                   /* つぎの日の あさで入る分 */
+    if(isSchool(fromIso(di)) && !completed(di,'k')) return false;   /* 学校の日は かえりも */
+    return true;
+  }
+  /* その日の活動データが「いつ入るはずか」を子どもの言葉で返す。入っていれば null */
+  const ACT_TERM = G1 ? 'そとあそび' : 'あそび・ゲーム';
+  function actPendingNote(di){
+    if(hasAct(di)) return null;
+    const tISO=iso(today()), nxt=iso(addDays(fromIso(di),1));
+    if(di===tISO) return '💡 '+ACT_TERM+'の きろくは、あしたの あさに 入れるよ。';
+    if(nxt===tISO) return completed(tISO,'m')
+      ? null
+      : '💡 '+ACT_TERM+'の きろくは、きょうの あさの きろくを 入れると ここに 出るよ。';
+    const x=fromIso(nxt);
+    return '💡 '+(x.getMonth()+1)+'/'+x.getDate()+'の あさの きろくが ないので、この日の '+ACT_TERM+'は 入っていないよ。';
+  }
   function ansLabel(di,qid){
     const a=ans(di,qid);
     if(a==null) return null;
@@ -1422,8 +1457,16 @@
     const x=fromIso(di), sch=isSchool(x), tISO=iso(today());
     const dl=(x.getMonth()+1)+'がつ'+x.getDate()+'にち('+DOW1[x.getDay()]+')';
     const hasM=completed(di,'m'), hasK=completed(di,'k');
-    const row=(k,qid)=>{ const v=ansLabel(di,qid); return v==null?'':
-      '<div class="dvrow"><span class="k">'+k+'</span><span class="v'+(v===DK_TXT?' dk':'')+'">'+v+'</span></div>'; };
+    /* その日 かならず 聞く質問(=入っていなければ「まだ」と出すもの)。
+       えらんだ答えによって出る おいかけの質問は、無くても正常なので出さない */
+    const CORE_M = G1 ? ['M1','G1OUT'] : ['M1','M2','M3','M4','M5','M6'];
+    const CORE_K = ['K1','K2'];
+    const recorded = hasM||hasK;   /* 1つも きろくが無い日は 従来どおり「まだ ないよ」 */
+    const isCore = qid => (CORE_M.indexOf(qid)>=0) || (sch && CORE_K.indexOf(qid)>=0);
+    const row=(k,qid)=>{ const v=ansLabel(di,qid);
+      if(v==null) return (recorded&&isCore(qid))
+        ? '<div class="dvrow"><span class="k">'+k+'</span><span class="v none">― まだ 入れていないよ</span></div>' : '';
+      return '<div class="dvrow"><span class="k">'+k+'</span><span class="v'+(v===DK_TXT?' dk':'')+'">'+v+'</span></div>'; };
     const sec=(t,body)=> body ? '<div class="dvsec"><h4>'+t+'</h4>'+body+'</div>' : '';
 
     const dur=dayDur(di);
@@ -1443,13 +1486,14 @@
 
     const sub=(sch?'🏫 学校が あった日':'🏅 おやすみの日')+
       (hasM||hasK ? ' ／ きろく: '+(hasM?'🌞あさ ':'')+(hasK?'🏫かえり':'') : '');
+    const pend=actPendingNote(di);   /* まだ入らない理由を子どもに説明する一言 */
 
     app.className='app'+(G1?' g1':'');
     app.innerHTML=
       '<div class="sess-head"><span class="badge b-hol">その日の きろく</span></div>'+
       '<div class="dvhd"><div class="d">📅 '+dl+(di===tISO?'（きょう）':'')+'</div>'+
       '<div class="sub">'+sub+'</div></div>'+
-      (body ? body+dayGoalHtml(di)+
+      (body ? body+(recorded&&pend?'<div class="dvnote">'+pend+'</div>':'')+dayGoalHtml(di)+
         '<div class="fbbox"><div class="fbchar">'+charVisual(S.buddy,buddyStage(),44)+
         '<small>'+charDef(S.buddy).name+'</small></div>'+
         '<div class="fbbubble">'+dayComment(di).map(t=>'<div>'+t+'</div>').join('')+'</div></div>'
