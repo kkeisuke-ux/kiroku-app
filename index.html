@@ -1,7 +1,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- アプリの版。更新するたびに必ずこの値を変える(自動更新の判定に使う) -->
-<meta name="app-ver" content="2026-09-13-1">
+<meta name="app-ver" content="2026-09-15-1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="きろく">
@@ -657,7 +657,15 @@
   const BED_H=[19.5,20,20.5,21,21.5,22,22.5,23,23.5];
   const WAKE_H=[5.5,6,6.5,7,7.5,8,8.5,9,9.5];
   const ST_H=[0,0.5,1,2,3];
-  const QV=1;  /* question_version */
+  /* question_version。**保存の取り決めが変わったら必ず上げる**。
+     v=1：朝セッションの M4/M4a/M5/M5a-d/M6/M6a/ATT/G1OUT は「きのう」のことなのに
+          その日(セッション日)の日付で保存していた（1日ずれ）
+     v=2：答えが指している日の日付で保存する（2026-09-15〜）。
+          M1(その日の調子)・M2(前夜に寝た時刻)・M3(その朝に起きた時刻)は
+          従来どおりセッション日。睡眠は「前夜＋その朝」で1日ぶんと数える慣行に合わせる */
+  const QV=2;  /* question_version */
+  /* 朝セッションで『きのうのこと』を聞く質問。v=2 からは前日の日付で保存する */
+  const PREV_DAY_Q=['M4','M4a','M5','M5a','M5b','M5c','M5d','M6','M6a','ATT','G1OUT'];
   /* 平日の「きのう」の質問は、学校に居た時間ではなく「学校が おわってから」の
      時間を聞いていることを、質問文と文脈チップの両方で明示する */
   const CTX_AFTER='🏫 がっこうが おわってから、よる ねるまでの こと';
@@ -827,9 +835,22 @@
   const DEFAULT_TARGET=3;
 
   /* ============ 回答の取得ヘルパ ============ */
+  /* 「dateIso の日のことを答えた値」を返す。最後の回答が有効。
+     2026-09-15(QV=2)より前は、朝セッション(s='m')の『きのうのこと』の設問を
+     セッション日の日付で保存していた（1日ずれ）。古い記録も正しい日に見えるよう、
+     ここで吸収する。判別材料：v(<2)とs('m')。あとから きろく(s='c')は当時から
+     その日の日付で保存しているので、ずらさない。 */
+  function isLegacyShift(e,qid){
+    return e.s==='m' && (e.v==null||e.v<2) && PREV_DAY_Q.includes(qid);
+  }
   function ans(dateIso,qid){
     let v=null;
-    S.events.forEach(e=>{ if(e.t==='ans'&&e.d===dateIso&&e.q===qid) v=e.a; });  /* 最後の回答が有効 */
+    S.events.forEach(e=>{ if(e.t==='ans'&&e.d===dateIso&&e.q===qid&&!isLegacyShift(e,qid)) v=e.a; });
+    if(v!=null) return v;
+    if(PREV_DAY_Q.includes(qid)){   /* 古い記録は「翌日の記録」の中にある */
+      const nxt=iso(addDays(fromIso(dateIso),1));
+      S.events.forEach(e=>{ if(e.t==='ans'&&e.d===nxt&&e.q===qid&&isLegacyShift(e,qid)) v=e.a; });
+    }
     return v;
   }
   function completed(dateIso,sess){ return S.events.some(e=>e.t==='complete'&&e.d===dateIso&&e.s===sess); }
@@ -1158,6 +1179,15 @@
     flowState={flow,sess,d:targetDate,badge,cls,bonus,idx:0,gates:{},hist:[],shownAt:Date.now()};
     go('flow');
   }
+  /* 回答を「どの日の記録」として保存するか。
+     朝セッション(m)で『きのうのこと』を聞く質問(PREV_DAY_Q)は、**前の日**の記録にする。
+     こうすると、あとから きろく・カレンダーからの入れ直し(その日のことを その日に保存)と
+     意味がそろい、同じ日付の同じ設問がいつも同じ日を指すようになる（2026-09-15〜, QV=2）。
+     M1・M2・M3 はセッション日のまま（その日の調子／前夜に寝た時刻／その朝に起きた時刻）。 */
+  function ansDate(it,fs){
+    if(fs.sess==='m' && PREV_DAY_Q.includes(it.id)) return iso(addDays(fromIso(fs.d),-1));
+    return fs.d;
+  }
   function visible(fs){ return fs.flow.filter(it=>!it.needs||it.needs.every(g=>fs.gates[g]!==false)); }
   function renderFlow(){
     const fs=flowState, items=visible(fs);
@@ -1207,14 +1237,14 @@
       if(it.kind==='cnt') extra='<span class="cnt">'+it.cnt[i]+'</span>';
       b.innerHTML=ic+extra+'<span>'+T(o[1])+'</span>';
       b.onclick=()=>{ b.classList.add('picked');
-        ev({t:'ans',d:fs.d,s:it.sess||fs.sess,q:it.id,v:QV,a:i,lat:Math.round((Date.now()-fs.shownAt)/100)/10});
+        ev({t:'ans',d:ansDate(it,fs),s:it.sess||fs.sess,q:it.id,v:QV,a:i,lat:Math.round((Date.now()-fs.shownAt)/100)/10});
         if(it.gate) fs.gates[it.gate]=it.openIdx.includes(i);
         if(it.multi) it.multi.forEach(m=>{ fs.gates[m.id]=m.openIdx.includes(i); });
         setTimeout(()=>{ fs.hist.push(fs.idx); fs.idx++; renderFlow(); },220); };
       box.appendChild(b);
     });
     if(it.forget){ const f=document.createElement('button'); f.className='opt forget'; f.textContent='おぼえてない';
-      f.onclick=()=>{ ev({t:'ans',d:fs.d,s:it.sess||fs.sess,q:it.id,v:QV,a:'DK',lat:Math.round((Date.now()-fs.shownAt)/100)/10});
+      f.onclick=()=>{ ev({t:'ans',d:ansDate(it,fs),s:it.sess||fs.sess,q:it.id,v:QV,a:'DK',lat:Math.round((Date.now()-fs.shownAt)/100)/10});
         /* おぼえてない時は、その先の追いかけ質問(分岐)を出さない=あいまいな記憶で答えさせない */
         if(it.gate) fs.gates[it.gate]=false;
         if(it.multi) it.multi.forEach(m=>{ fs.gates[m.id]=false; });
@@ -1469,6 +1499,11 @@
     const x=fromIso(di), prev=addDays(x,-1);
     const dl=dt=>(dt.getMonth()+1)+'/'+dt.getDate()+'('+DOW1[dt.getDay()]+')';
     const head=[{id:'ATT2',icon:'🏫',q:dl(x)+'は 学校が あった？',opts:[['🏫','あった'],['🏠','なかった(おやすみ)']],gate:'sch',openIdx:[0]}];
+    /* きょうの分は、スクリーンタイム・うんどう・ならいごとを聞かない。
+       その日がまだ終わっていないので答えようがないため（あしたの朝の記録で聞く）。
+       ここを聞いてしまうのが、2026-09-13に見つかった不具合だった。 */
+    const isToday=(di===iso(today()));
+    const dropIfToday=arr=>isToday?arr.filter(q=>!PREV_DAY_Q.includes(q.id)):arr;
     /* なおしフローは記憶が前提なので、全問に「おぼえてない」を付ける。
        学校があった日(gates.sch)は、質問文と文脈チップで「学校のあと」を明示 */
     const afterQ=g=>g.sch?CTX_AFTER:null, afterQ2=g=>g.sch?CTX_AFTER2:null;
@@ -1478,7 +1513,7 @@
       const kaeri=KAERI_G1.map(q=>Object.assign({},q,{sess:'k',needs:(q.needs||[]).concat('sch'),forget:true}));
       /* K1にも needs sch を付ける(K1は元々 needs なし) */
       kaeri[0]=Object.assign({},KAERI_G1[0],{sess:'k',needs:['sch'],forget:true});
-      return head.concat(morning, kaeri);
+      return head.concat(dropIfToday(morning), kaeri);
     }
     const morning=[
       {id:'M1',icon:'🌞',q:'その日の からだの ちょうしは？',opts:[['😊','げんき'],['😕','ちょっと わるい'],['🤕','ケガ・びょうきで うんどう できない']],forget:true},
@@ -1497,7 +1532,7 @@
       {id:'K3',sess:'k',icon:'👫',q:'ひるやすみは、だれと いることが おおかった？',needs:['sch','lp'],opts:[['🧍','ひとり'],['👫','ともだち'],['🧑‍🏫','せんせい・おとな']],gate:'kfr',openIdx:[1],forget:true},
       {id:'K3a',sess:'k',kind:'cnt',icon:'🔢',q:'いっしょに あそんだ ともだちは なんにん？',needs:['sch','lp','kfr'],opts:[['','1にん'],['','2〜3にん'],['','4にん いじょう']],cnt:['●','●●','●●●●'],forget:true},
     ];
-    return head.concat(morning, kaeri);
+    return head.concat(dropIfToday(morning), kaeri);
   }
 
   /* ============ ホーム ============ */
